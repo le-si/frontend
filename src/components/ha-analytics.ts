@@ -1,8 +1,9 @@
 import "@lrnwebcomponents/simple-tooltip/simple-tooltip";
-import { css, CSSResultGroup, html, LitElement, TemplateResult } from "lit";
+import type { CSSResultGroup, TemplateResult } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators";
 import { fireEvent } from "../common/dom/fire_event";
-import { LocalizeFunc } from "../common/translations/localize";
+import type { LocalizeFunc } from "../common/translations/localize";
 import type { Analytics, AnalyticsPreferences } from "../data/analytics";
 import { haStyle } from "../resources/styles";
 import "./ha-settings-row";
@@ -53,39 +54,38 @@ export class HaAnalytics extends LitElement {
         </ha-switch>
       </ha-settings-row>
       ${ADDITIONAL_PREFERENCES.map(
-        (preference) =>
-          html`
-            <ha-settings-row>
-              <span slot="heading" data-for=${preference}>
-                ${this.localize(
-                  `ui.panel.${this.translationKeyPanel}.analytics.preferences.${preference}.title`
-                )}
-              </span>
-              <span slot="description" data-for=${preference}>
-                ${this.localize(
-                  `ui.panel.${this.translationKeyPanel}.analytics.preferences.${preference}.description`
-                )}
-              </span>
-              <span>
-                <ha-switch
-                  @change=${this._handleRowClick}
-                  .checked=${this.analytics?.preferences[preference]}
-                  .preference=${preference}
-                  name=${preference}
-                >
-                </ha-switch>
-                ${!baseEnabled
-                  ? html`
-                      <simple-tooltip animation-delay="0" position="right">
-                        ${this.localize(
-                          `ui.panel.${this.translationKeyPanel}.analytics.need_base_enabled`
-                        )}
-                      </simple-tooltip>
-                    `
-                  : ""}
-              </span>
-            </ha-settings-row>
-          `
+        (preference) => html`
+          <ha-settings-row>
+            <span slot="heading" data-for=${preference}>
+              ${this.localize(
+                `ui.panel.${this.translationKeyPanel}.analytics.preferences.${preference}.title`
+              )}
+            </span>
+            <span slot="description" data-for=${preference}>
+              ${this.localize(
+                `ui.panel.${this.translationKeyPanel}.analytics.preferences.${preference}.description`
+              )}
+            </span>
+            <span>
+              <ha-switch
+                @change=${this._handleRowClick}
+                .checked=${this.analytics?.preferences[preference]}
+                .preference=${preference}
+                name=${preference}
+              >
+              </ha-switch>
+              ${!baseEnabled
+                ? html`
+                    <simple-tooltip animation-delay="0" position="right">
+                      ${this.localize(
+                        `ui.panel.${this.translationKeyPanel}.analytics.need_base_enabled`
+                      )}
+                    </simple-tooltip>
+                  `
+                : ""}
+            </span>
+          </ha-settings-row>
+        `
       )}
       <ha-settings-row>
         <span slot="heading" data-for="diagnostics">

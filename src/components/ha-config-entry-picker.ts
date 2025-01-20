@@ -1,12 +1,13 @@
 import "@material/mwc-list/mwc-list-item";
-import { ComboBoxLitRenderer } from "@vaadin/combo-box/lit";
+import type { ComboBoxLitRenderer } from "@vaadin/combo-box/lit";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
 import { fireEvent } from "../common/dom/fire_event";
 import { caseInsensitiveStringCompare } from "../common/string/compare";
-import { ConfigEntry, getConfigEntries } from "../data/config_entries";
+import type { ConfigEntry } from "../data/config_entries";
+import { getConfigEntries } from "../data/config_entries";
 import { domainToName } from "../data/integration";
-import { ValueChangedEvent, HomeAssistant } from "../types";
+import type { ValueChangedEvent, HomeAssistant } from "../types";
 import { brandsUrl } from "../util/brands-url";
 import "./ha-combo-box";
 import type { HaComboBox } from "./ha-combo-box";
@@ -47,29 +48,29 @@ class HaConfigEntryPicker extends LitElement {
     this._getConfigEntries();
   }
 
-  private _rowRenderer: ComboBoxLitRenderer<ConfigEntryExtended> = (
-    item
-  ) => html`<mwc-list-item twoline graphic="icon">
-    <span
-      >${item.title ||
-      this.hass.localize(
-        "ui.panel.config.integrations.config_entry.unnamed_entry"
-      )}</span
-    >
-    <span slot="secondary">${item.localized_domain_name}</span>
-    <img
-      alt=""
-      slot="graphic"
-      src=${brandsUrl({
-        domain: item.domain,
-        type: "icon",
-        darkOptimized: this.hass.themes?.darkMode,
-      })}
-      referrerpolicy="no-referrer"
-      @error=${this._onImageError}
-      @load=${this._onImageLoad}
-    />
-  </mwc-list-item>`;
+  private _rowRenderer: ComboBoxLitRenderer<ConfigEntryExtended> = (item) =>
+    html`<mwc-list-item twoline graphic="icon">
+      <span
+        >${item.title ||
+        this.hass.localize(
+          "ui.panel.config.integrations.config_entry.unnamed_entry"
+        )}</span
+      >
+      <span slot="secondary">${item.localized_domain_name}</span>
+      <img
+        alt=""
+        slot="graphic"
+        src=${brandsUrl({
+          domain: item.domain,
+          type: "icon",
+          darkOptimized: this.hass.themes?.darkMode,
+        })}
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+        @error=${this._onImageError}
+        @load=${this._onImageLoad}
+      />
+    </mwc-list-item>`;
 
   protected render() {
     if (!this._configEntries) {

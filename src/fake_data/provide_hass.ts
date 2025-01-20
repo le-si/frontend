@@ -1,25 +1,27 @@
-import { HassEntities } from "home-assistant-js-websocket";
+import type { HassEntities, HassEntity } from "home-assistant-js-websocket";
 import {
   applyThemesOnElement,
   invalidateThemeCache,
 } from "../common/dom/apply_themes_on_element";
 import { fireEvent } from "../common/dom/fire_event";
+import { computeFormatFunctions } from "../common/translations/entity-state";
 import { computeLocalize } from "../common/translations/localize";
 import { DEFAULT_PANEL } from "../data/panel";
 import {
+  DateFormat,
   FirstWeekday,
   NumberFormat,
-  DateFormat,
   TimeFormat,
   TimeZone,
 } from "../data/translation";
 import { translationMetadata } from "../resources/translations-metadata";
-import { HomeAssistant } from "../types";
+import type { HomeAssistant } from "../types";
 import { getLocalLanguage, getTranslation } from "../util/common-translation";
 import { demoConfig } from "./demo_config";
 import { demoPanels } from "./demo_panels";
 import { demoServices } from "./demo_services";
-import { Entity, getEntity } from "./entity";
+import type { Entity } from "./entity";
+import { getEntity } from "./entity";
 
 const ensureArray = <T>(val: T | T[]): T[] =>
   Array.isArray(val) ? val : [val];
@@ -49,6 +51,13 @@ export interface MockHomeAssistant extends HomeAssistant {
   mockAPI(path: string | RegExp, callback: MockRestCallback);
   mockEvent(event);
   mockTheme(theme: Record<string, string> | null);
+  formatEntityState(stateObj: HassEntity, state?: string): string;
+  formatEntityAttributeValue(
+    stateObj: HassEntity,
+    attribute: string,
+    value?: any
+  ): string;
+  formatEntityAttributeName(stateObj: HassEntity, attribute: string): string;
 }
 
 export const provideHass = (
@@ -60,10 +69,8 @@ export const provideHass = (
   const hass = (): MockHomeAssistant => elements[0].hass;
 
   const wsCommands = {};
-  const restResponses: Array<[string | RegExp, MockRestCallback]> = [];
-  const eventListeners: {
-    [event: string]: Array<(event) => void>;
-  } = {};
+  const restResponses: [string | RegExp, MockRestCallback][] = [];
+  const eventListeners: Record<string, ((event) => void)[]> = {};
   const entities = {};
 
   async function updateTranslations(
@@ -73,6 +80,7 @@ export const provideHass = (
     const lang = language || getLocalLanguage();
     const translation = await getTranslation(fragment, lang);
     await addTranslations(translation.data, lang);
+    updateFormatFunctions();
   }
 
   async function addTranslations(
@@ -101,6 +109,25 @@ export const provideHass = (
     });
   }
 
+  async function updateFormatFunctions() {
+    const {
+      formatEntityState,
+      formatEntityAttributeName,
+      formatEntityAttributeValue,
+    } = await computeFormatFunctions(
+      hass().localize,
+      hass().locale,
+      hass().config,
+      hass().entities,
+      [] // numericDeviceClasses
+    );
+    hass().updateHass({
+      formatEntityState,
+      formatEntityAttributeName,
+      formatEntityAttributeValue,
+    });
+  }
+
   function addEntities(newEntities, replace = false) {
     const states = {};
     ensureArray(newEntities).forEach((ent) => {
@@ -115,29 +142,22 @@ export const provideHass = (
     } else {
       updateStates(states);
     }
+    updateFormatFunctions();
   }
 
   function mockAPI(path, callback) {
     restResponses.push([path, callback]);
   }
 
-  mockAPI(
-    /states\/.+/,
-    (
-      // @ts-ignore
-      method,
-      path,
-      parameters
-    ) => {
-      const [domain, objectId] = path.substr(7).split(".", 2);
-      if (!domain || !objectId) {
-        return;
-      }
-      addEntities(
-        getEntity(domain, objectId, parameters.state, parameters.attributes)
-      );
+  mockAPI(/states\/.+/, (_method, path, parameters) => {
+    const [domain, objectId] = path.substr(7).split(".", 2);
+    if (!domain || !objectId) {
+      return;
     }
-  );
+    addEntities(
+      getEntity(domain, objectId, parameters.state, parameters.attributes)
+    );
+  });
 
   const localLanguage = getLocalLanguage();
   const noop = () => undefined;
@@ -197,6 +217,7 @@ export const provideHass = (
       },
       suspendReconnectUntil: noop,
       suspend: noop,
+      ping: noop,
       socket: {
         readyState: WebSocket.OPEN,
       },
@@ -243,11 +264,14 @@ export const provideHass = (
     },
     dockedSidebar: "auto",
     vibrate: true,
+    debugConnection: false,
     suspendWhenHidden: false,
     moreInfoEntityId: null as any,
     // @ts-ignore
     async callService(domain, service, data) {
       if (data && "entity_id" in data) {
+        // eslint-disable-next-line
+        console.log("Entity service call", domain, service, data);
         await Promise.all(
           ensureArray(data.entity_id).map((ent) =>
             entities[ent].handleService(domain, service, data)
@@ -318,6 +342,11 @@ export const provideHass = (
     areas: {},
     devices: {},
     entities: {},
+    formatEntityState: (stateObj, state) =>
+      (state !== null ? state : stateObj.state) ?? "",
+    formatEntityAttributeName: (_stateObj, attribute) => attribute,
+    formatEntityAttributeValue: (stateObj, attribute, value) =>
+      value !== null ? value : (stateObj.attributes[attribute] ?? ""),
     ...overrideData,
   };
 

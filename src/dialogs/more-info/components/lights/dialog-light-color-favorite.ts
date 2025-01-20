@@ -1,18 +1,21 @@
 import { mdiClose } from "@mdi/js";
-import { css, CSSResultGroup, html, LitElement, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import type { CSSResultGroup } from "lit";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement, property, state, query } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import "../../../../components/ha-button";
-import "../../../../components/ha-dialog";
+import {
+  getMobileOpenFromBottomAnimation,
+  getMobileCloseToBottomAnimation,
+} from "../../../../components/ha-md-dialog";
+import type { HaMdDialog } from "../../../../components/ha-md-dialog";
 import "../../../../components/ha-dialog-header";
 import "../../../../components/ha-icon-button-toggle";
 import type { EntityRegistryEntry } from "../../../../data/entity_registry";
+import type { LightColor, LightEntity } from "../../../../data/light";
 import {
-  formatTempColor,
-  LightColor,
   LightColorMode,
-  LightEntity,
   lightSupportsColor,
   lightSupportsColorMode,
 } from "../../../../data/light";
@@ -38,33 +41,22 @@ class DialogLightColorFavorite extends LitElement {
 
   @state() private _modes: LightPickerMode[] = [];
 
-  @state() private _currentValue?: string;
-
-  private _colorHovered(ev: CustomEvent<HASSDomEvents["color-hovered"]>) {
-    if (ev.detail && "color_temp_kelvin" in ev.detail) {
-      this._currentValue = formatTempColor(ev.detail.color_temp_kelvin);
-    } else {
-      this._currentValue = undefined;
-    }
-  }
+  @query("ha-md-dialog") private _dialog?: HaMdDialog;
 
   public async showDialog(
     dialogParams: LightColorFavoriteDialogParams
   ): Promise<void> {
     this._entry = dialogParams.entry;
     this._dialogParams = dialogParams;
-    this._updateModes(dialogParams.defaultMode);
-    await this.updateComplete;
+    this._color = dialogParams.initialColor ?? this._computeCurrentColor();
+    this._updateModes();
   }
 
   public closeDialog(): void {
-    this._dialogParams = undefined;
-    this._entry = undefined;
-    this._color = undefined;
-    fireEvent(this, "dialog-closed", { dialog: this.localName });
+    this._dialog?.close();
   }
 
-  private _updateModes(defaultMode?: LightPickerMode) {
+  private _updateModes() {
     const supportsTemp = lightSupportsColorMode(
       this.stateObj!,
       LightColorMode.COLOR_TEMP
@@ -81,13 +73,40 @@ class DialogLightColorFavorite extends LitElement {
     }
 
     this._modes = modes;
-    this._mode =
-      defaultMode ??
-      (this.stateObj!.attributes.color_mode
-        ? this.stateObj!.attributes.color_mode === LightColorMode.COLOR_TEMP
-          ? LightColorMode.COLOR_TEMP
-          : "color"
-        : this._modes[0]);
+
+    if (this._color) {
+      this._mode = "color_temp_kelvin" in this._color ? "color_temp" : "color";
+    } else {
+      this._mode = this._modes[0];
+    }
+  }
+
+  private _computeCurrentColor() {
+    const attributes = this.stateObj!.attributes;
+    const color_mode = attributes.color_mode;
+
+    let currentColor: LightColor | undefined;
+    if (color_mode === LightColorMode.XY) {
+      // XY color not supported for favorites. Try to grab the hs or rgb instead.
+      if (attributes.hs_color) {
+        currentColor = { hs_color: attributes.hs_color };
+      } else if (attributes.rgb_color) {
+        currentColor = { rgb_color: attributes.rgb_color };
+      }
+    } else if (
+      color_mode === LightColorMode.COLOR_TEMP &&
+      attributes.color_temp_kelvin
+    ) {
+      currentColor = {
+        color_temp_kelvin: attributes.color_temp_kelvin,
+      };
+    } else if (attributes[color_mode + "_color"]) {
+      currentColor = {
+        [color_mode + "_color"]: attributes[color_mode + "_color"],
+      } as LightColor;
+    }
+
+    return currentColor;
   }
 
   private _colorChanged(ev: CustomEvent) {
@@ -103,7 +122,18 @@ class DialogLightColorFavorite extends LitElement {
 
   private async _cancel() {
     this._dialogParams?.cancel?.();
+  }
+
+  private _cancelDialog() {
+    this._cancel();
     this.closeDialog();
+  }
+
+  private _dialogClosed(): void {
+    this._dialogParams = undefined;
+    this._entry = undefined;
+    this._color = undefined;
+    fireEvent(this, "dialog-closed", { dialog: this.localName });
   }
 
   private async _save() {
@@ -129,29 +159,32 @@ class DialogLightColorFavorite extends LitElement {
     }
 
     return html`
-      <ha-dialog
+      <ha-md-dialog
         open
-        @closed=${this._cancel}
-        .heading=${this._dialogParams?.title ?? ""}
-        flexContent
+        @cancel=${this._cancel}
+        @closed=${this._dialogClosed}
+        aria-labelledby="dialog-light-color-favorite-title"
+        .getOpenAnimation=${getMobileOpenFromBottomAnimation}
+        .getCloseAnimation=${getMobileCloseToBottomAnimation}
       >
-        <ha-dialog-header slot="heading">
+        <ha-dialog-header slot="headline">
           <ha-icon-button
             slot="navigationIcon"
-            dialogAction="cancel"
+            @click=${this.closeDialog}
             .label=${this.hass.localize("ui.common.close")}
             .path=${mdiClose}
           ></ha-icon-button>
-          <span slot="title">${this._dialogParams?.title}</span>
+          <span slot="title" id="dialog-light-color-favorite-title"
+            >${this._dialogParams?.title}</span
+          >
         </ha-dialog-header>
-        <div class="header">
-          <span class="value">${this._currentValue}</span>
-          ${this._modes.length > 1
-            ? html`
-                <div class="modes">
-                  ${this._modes.map(
-                    (value) =>
-                      html`
+        <div slot="content">
+          <div class="header">
+            ${this._modes.length > 1
+              ? html`
+                  <div class="modes">
+                    ${this._modes.map(
+                      (value) => html`
                         <ha-icon-button-toggle
                           border-only
                           .selected=${value === this._mode}
@@ -166,43 +199,43 @@ class DialogLightColorFavorite extends LitElement {
                           ></span>
                         </ha-icon-button-toggle>
                       `
-                  )}
-                </div>
-              `
-            : nothing}
+                    )}
+                  </div>
+                `
+              : nothing}
+          </div>
+          <div class="content">
+            ${this._mode === "color_temp"
+              ? html`
+                  <light-color-temp-picker
+                    .hass=${this.hass}
+                    .stateObj=${this.stateObj}
+                    @color-changed=${this._colorChanged}
+                  >
+                  </light-color-temp-picker>
+                `
+              : nothing}
+            ${this._mode === "color"
+              ? html`
+                  <light-color-rgb-picker
+                    .hass=${this.hass}
+                    .stateObj=${this.stateObj}
+                    @color-changed=${this._colorChanged}
+                  >
+                  </light-color-rgb-picker>
+                `
+              : nothing}
+          </div>
         </div>
-
-        <div class="content">
-          ${this._mode === "color_temp"
-            ? html`
-                <light-color-temp-picker
-                  .hass=${this.hass}
-                  .stateObj=${this.stateObj}
-                  @color-changed=${this._colorChanged}
-                  @color-hovered=${this._colorHovered}
-                >
-                </light-color-temp-picker>
-              `
-            : nothing}
-          ${this._mode === "color"
-            ? html`
-                <light-color-rgb-picker
-                  .hass=${this.hass}
-                  .stateObj=${this.stateObj}
-                  @color-changed=${this._colorChanged}
-                  @color-hovered=${this._colorHovered}
-                >
-                </light-color-rgb-picker>
-              `
-            : nothing}
+        <div slot="actions">
+          <ha-button @click=${this._cancelDialog}>
+            ${this.hass.localize("ui.common.cancel")}
+          </ha-button>
+          <ha-button @click=${this._save} .disabled=${!this._color}
+            >${this.hass.localize("ui.common.save")}</ha-button
+          >
         </div>
-        <ha-button slot="secondaryAction" dialogAction="cancel">
-          ${this.hass.localize("ui.common.cancel")}
-        </ha-button>
-        <ha-button slot="primaryAction" @click=${this._save}
-          >${this.hass.localize("ui.common.save")}</ha-button
-        >
-      </ha-dialog>
+      </ha-md-dialog>
     `;
   }
 
@@ -210,19 +243,23 @@ class DialogLightColorFavorite extends LitElement {
     return [
       haStyleDialog,
       css`
-        ha-dialog {
-          --dialog-content-padding: 0;
+        ha-md-dialog {
+          min-width: 420px; /* prevent width jumps when switching modes */
+          max-height: min(
+            600px,
+            100% - 48px
+          ); /* prevent scrolling on desktop */
         }
 
         @media all and (max-width: 450px), all and (max-height: 500px) {
-          ha-dialog {
-            --dialog-surface-margin-top: 100px;
-            --mdc-dialog-min-height: auto;
-            --mdc-dialog-max-height: calc(100% - 100px);
-            --ha-dialog-border-radius: var(
-              --ha-dialog-bottom-sheet-border-radius,
-              28px 28px 0 0
-            );
+          ha-md-dialog {
+            min-width: 100%;
+            min-height: auto;
+            max-height: calc(100% - 100px);
+            margin-bottom: 0;
+
+            --md-dialog-container-shape-start-start: 28px;
+            --md-dialog-container-shape-start-end: 28px;
           }
         }
 
@@ -257,21 +294,6 @@ class DialogLightColorFavorite extends LitElement {
             white 50%,
             rgb(255, 160, 0) 100%
           );
-        }
-        .value {
-          pointer-events: none;
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          margin: auto;
-          font-style: normal;
-          font-weight: 500;
-          font-size: 16px;
-          height: 48px;
-          line-height: 48px;
-          letter-spacing: 0.1px;
-          text-align: center;
         }
       `,
     ];

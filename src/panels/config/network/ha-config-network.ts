@@ -1,12 +1,6 @@
 import "@material/mwc-button/mwc-button";
-import {
-  css,
-  CSSResultGroup,
-  html,
-  LitElement,
-  PropertyValues,
-  nothing,
-} from "lit";
+import type { CSSResultGroup, PropertyValues } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { isComponentLoaded } from "../../../common/config/is_component_loaded";
 import "../../../components/ha-alert";
@@ -15,11 +9,8 @@ import "../../../components/ha-checkbox";
 import "../../../components/ha-network";
 import "../../../components/ha-settings-row";
 import { fetchNetworkInfo } from "../../../data/hassio/network";
-import {
-  getNetworkConfig,
-  NetworkConfig,
-  setNetworkConfig,
-} from "../../../data/network";
+import type { NetworkConfig } from "../../../data/network";
+import { getNetworkConfig, setNetworkConfig } from "../../../data/network";
 import { haStyle } from "../../../resources/styles";
 import type { HomeAssistant } from "../../../types";
 
@@ -40,7 +31,10 @@ class ConfigNetwork extends LitElement {
     }
 
     return html`
-      <ha-card outlined header="Network Adapter">
+      <ha-card
+        outlined
+        header=${this.hass.localize("ui.panel.config.network.network_adapter")}
+      >
         <div class="card-content">
           ${this._error
             ? html`
@@ -50,9 +44,9 @@ class ConfigNetwork extends LitElement {
               `
             : ""}
           <p>
-            Configure which network adapters integrations will use. Currently
-            this setting only affects multicast traffic. A restart is required
-            for these settings to apply.
+            ${this.hass.localize(
+              "ui.panel.config.network.network_adapter_info"
+            )}
           </p>
           <ha-network
             @network-config-changed=${this._configChanged}

@@ -1,13 +1,7 @@
 import "@material/mwc-button/mwc-button";
 import "@material/mwc-list/mwc-list-item";
-import {
-  css,
-  CSSResultGroup,
-  html,
-  LitElement,
-  PropertyValues,
-  TemplateResult,
-} from "lit";
+import type { PropertyValues, TemplateResult } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { fireEvent } from "../../common/dom/fire_event";
 import "../../components/ha-formfield";
@@ -19,29 +13,31 @@ import "../../components/ha-textfield";
 import {
   DEFAULT_ACCENT_COLOR,
   DEFAULT_PRIMARY_COLOR,
-} from "../../resources/ha-style";
-import { HomeAssistant } from "../../types";
+} from "../../resources/styles-data";
+import type { HomeAssistant } from "../../types";
 import { documentationUrl } from "../../util/documentation-url";
 
-const BACKEND_SELECTED_THEME = "Backend-selected";
-const DEFAULT_THEME = "default";
+const USE_DEFAULT_THEME = "__USE_DEFAULT_THEME__";
+const HOME_ASSISTANT_THEME = "default";
 
 @customElement("ha-pick-theme-row")
 export class HaPickThemeRow extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
-  @property({ type: Boolean }) public narrow!: boolean;
+  @property({ type: Boolean }) public narrow = false;
 
   @state() _themeNames: string[] = [];
 
   protected render(): TemplateResult {
     const hasThemes =
       this.hass.themes.themes && Object.keys(this.hass.themes.themes).length;
+
+    const curThemeIsUseDefault = this.hass.selectedTheme?.theme === "";
     const curTheme = this.hass.selectedTheme?.theme
       ? this.hass.selectedTheme?.theme
       : this.hass.themes.darkMode
-      ? this.hass.themes.default_dark_theme || this.hass.themes.default_theme
-      : this.hass.themes.default_theme;
+        ? this.hass.themes.default_dark_theme || this.hass.themes.default_theme
+        : this.hass.themes.default_theme;
 
     const themeSettings = this.hass.selectedTheme;
 
@@ -68,15 +64,15 @@ export class HaPickThemeRow extends LitElement {
         <ha-select
           .label=${this.hass.localize("ui.panel.profile.themes.dropdown_label")}
           .disabled=${!hasThemes}
-          .value=${this.hass.selectedTheme?.theme || BACKEND_SELECTED_THEME}
+          .value=${this.hass.selectedTheme?.theme || USE_DEFAULT_THEME}
           @selected=${this._handleThemeSelection}
           naturalMenuWidth
         >
-          <mwc-list-item .value=${BACKEND_SELECTED_THEME}>
-            ${this.hass.localize("ui.panel.profile.themes.backend-selected")}
+          <mwc-list-item .value=${USE_DEFAULT_THEME}>
+            ${this.hass.localize("ui.panel.profile.themes.use_default")}
           </mwc-list-item>
-          <mwc-list-item .value=${DEFAULT_THEME}>
-            ${this.hass.localize("ui.panel.profile.themes.default")}
+          <mwc-list-item .value=${HOME_ASSISTANT_THEME}>
+            Home Assistant
           </mwc-list-item>
           ${this._themeNames.map(
             (theme) => html`
@@ -85,7 +81,11 @@ export class HaPickThemeRow extends LitElement {
           )}
         </ha-select>
       </ha-settings-row>
-      ${curTheme === DEFAULT_THEME || this._supportsModeSelection(curTheme)
+      ${curTheme === HOME_ASSISTANT_THEME ||
+      (curThemeIsUseDefault &&
+        this.hass.themes.default_dark_theme &&
+        this.hass.themes.default_theme) ||
+      this._supportsModeSelection(curTheme)
         ? html` <div class="inputs">
             <ha-formfield
               .label=${this.hass.localize(
@@ -125,7 +125,7 @@ export class HaPickThemeRow extends LitElement {
               >
               </ha-radio>
             </ha-formfield>
-            ${curTheme === DEFAULT_THEME
+            ${curTheme === HOME_ASSISTANT_THEME
               ? html`<div class="color-pickers">
                   <ha-textfield
                     .value=${themeSettings?.primaryColor ||
@@ -207,7 +207,7 @@ export class HaPickThemeRow extends LitElement {
       return;
     }
 
-    if (theme === BACKEND_SELECTED_THEME) {
+    if (theme === USE_DEFAULT_THEME) {
       if (this.hass.selectedTheme?.theme) {
         fireEvent(this, "settheme", {
           theme: "",
@@ -224,34 +224,32 @@ export class HaPickThemeRow extends LitElement {
     });
   }
 
-  static get styles(): CSSResultGroup {
-    return css`
-      a {
-        color: var(--primary-color);
-      }
-      .inputs {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        margin: 0 12px;
-      }
-      ha-formfield {
-        margin: 0 4px;
-      }
-      .color-pickers {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        flex-grow: 1;
-      }
-      ha-textfield {
-        --text-field-padding: 8px;
-        min-width: 75px;
-        flex-grow: 1;
-        margin: 0 4px;
-      }
-    `;
-  }
+  static styles = css`
+    a {
+      color: var(--primary-color);
+    }
+    .inputs {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      margin: 0 12px;
+    }
+    ha-formfield {
+      margin: 0 4px;
+    }
+    .color-pickers {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      flex-grow: 1;
+    }
+    ha-textfield {
+      --text-field-padding: 8px;
+      min-width: 75px;
+      flex-grow: 1;
+      margin: 0 4px;
+    }
+  `;
 }
 
 declare global {

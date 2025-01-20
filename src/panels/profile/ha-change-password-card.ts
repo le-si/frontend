@@ -1,19 +1,20 @@
 import "@material/mwc-button";
-import {
-  css,
-  CSSResultGroup,
-  html,
-  LitElement,
-  PropertyValues,
-  TemplateResult,
-} from "lit";
+import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import "../../components/ha-card";
 import "../../components/ha-circular-progress";
 import "../../components/ha-textfield";
+import "../../components/ha-password-field";
 import { haStyle } from "../../resources/styles";
 import type { HomeAssistant } from "../../types";
 import "../../components/ha-alert";
+import {
+  showAlertDialog,
+  showConfirmationDialog,
+} from "../../dialogs/generic/show-dialog-box";
+import type { RefreshToken } from "../../data/refresh_token";
+import { changePassword, deleteAllRefreshTokens } from "../../data/auth";
 
 @customElement("ha-change-password-card")
 class HaChangePasswordCard extends LitElement {
@@ -31,6 +32,8 @@ class HaChangePasswordCard extends LitElement {
 
   @state() private _passwordConfirm = "";
 
+  @property({ attribute: false }) public refreshTokens?: RefreshToken[];
+
   protected render(): TemplateResult {
     return html`
       <ha-card
@@ -44,51 +47,51 @@ class HaChangePasswordCard extends LitElement {
             ? html`<ha-alert alert-type="success">${this._statusMsg}</ha-alert>`
             : ""}
 
-          <ha-textfield
+          <ha-password-field
             id="currentPassword"
             name="currentPassword"
             .label=${this.hass.localize(
               "ui.panel.profile.change_password.current_password"
             )}
-            type="password"
             autocomplete="current-password"
             .value=${this._currentPassword}
             @input=${this._currentPasswordChanged}
+            @change=${this._currentPasswordChanged}
             required
-          ></ha-textfield>
+          ></ha-password-field>
 
           ${this._currentPassword
-            ? html`<ha-textfield
+            ? html`<ha-password-field
                   .label=${this.hass.localize(
                     "ui.panel.profile.change_password.new_password"
                   )}
                   name="password"
-                  type="password"
                   autocomplete="new-password"
                   .value=${this._password}
+                  @input=${this._newPasswordChanged}
                   @change=${this._newPasswordChanged}
                   required
-                  auto-validate
-                ></ha-textfield>
-                <ha-textfield
+                  autoValidate
+                ></ha-password-field>
+                <ha-password-field
                   .label=${this.hass.localize(
                     "ui.panel.profile.change_password.confirm_new_password"
                   )}
                   name="passwordConfirm"
-                  type="password"
                   autocomplete="new-password"
                   .value=${this._passwordConfirm}
                   @input=${this._newPasswordConfirmChanged}
+                  @change=${this._newPasswordConfirmChanged}
                   required
-                  auto-validate
-                ></ha-textfield>`
+                  autoValidate
+                ></ha-password-field>`
             : ""}
         </div>
 
         <div class="card-actions">
           ${this._loading
             ? html`<div>
-                <ha-circular-progress active></ha-circular-progress>
+                <ha-circular-progress indeterminate></ha-circular-progress>
               </div>`
             : html`<mwc-button
                 @click=${this._changePassword}
@@ -148,11 +151,7 @@ class HaChangePasswordCard extends LitElement {
     this._errorMsg = undefined;
 
     try {
-      await this.hass.callWS({
-        type: "config/auth_provider/homeassistant/change_password",
-        current_password: this._currentPassword,
-        new_password: this._password,
-      });
+      await changePassword(this.hass, this._currentPassword, this._password);
     } catch (err: any) {
       this._errorMsg = err.message;
       return;
@@ -163,6 +162,33 @@ class HaChangePasswordCard extends LitElement {
     this._statusMsg = this.hass.localize(
       "ui.panel.profile.change_password.success"
     );
+
+    if (
+      this.refreshTokens &&
+      (await showConfirmationDialog(this, {
+        title: this.hass.localize(
+          "ui.panel.profile.change_password.logout_all_sessions"
+        ),
+        text: this.hass.localize(
+          "ui.panel.profile.change_password.logout_all_sessions_text"
+        ),
+        dismissText: this.hass.localize("ui.common.no"),
+        confirmText: this.hass.localize("ui.common.yes"),
+        destructive: true,
+      }))
+    ) {
+      try {
+        await deleteAllRefreshTokens(this.hass);
+      } catch (err: any) {
+        await showAlertDialog(this, {
+          title: this.hass.localize(
+            "ui.panel.profile.change_password.delete_failed"
+          ),
+          text: err.message,
+        });
+      }
+    }
+
     this._currentPassword = "";
     this._password = "";
     this._passwordConfirm = "";

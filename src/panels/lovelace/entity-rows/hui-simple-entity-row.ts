@@ -1,19 +1,12 @@
-import {
-  css,
-  CSSResultGroup,
-  html,
-  LitElement,
-  PropertyValues,
-  nothing,
-} from "lit";
+import type { PropertyValues } from "lit";
+import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
-import { computeStateDisplay } from "../../../common/entity/compute_state_display";
-import { HomeAssistant } from "../../../types";
-import { EntitiesCardEntityConfig } from "../cards/types";
+import type { HomeAssistant } from "../../../types";
+import type { EntitiesCardEntityConfig } from "../cards/types";
 import { hasConfigOrEntityChanged } from "../common/has-changed";
 import "../components/hui-generic-entity-row";
 import { createEntityNotFoundWarning } from "../components/hui-warning";
-import { LovelaceRow } from "./types";
+import type { LovelaceRow } from "./types";
 
 @customElement("hui-simple-entity-row")
 class HuiSimpleEntityRow extends LitElement implements LovelaceRow {
@@ -49,27 +42,16 @@ class HuiSimpleEntityRow extends LitElement implements LovelaceRow {
 
     return html`
       <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
-        ${computeStateDisplay(
-          this.hass!.localize,
-          stateObj,
-          this.hass.locale,
-          this.hass.config,
-          this.hass.entities
-        )}
+        ${this.hass.formatEntityState(stateObj)}
       </hui-generic-entity-row>
     `;
   }
 
-  static get styles(): CSSResultGroup {
-    return css`
-      div {
-        text-align: right;
-      }
-      .pointer {
-        cursor: pointer;
-      }
-    `;
-  }
+  static styles = css`
+    div {
+      text-align: right;
+    }
+  `;
 }
 
 declare global {

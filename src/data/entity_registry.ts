@@ -1,42 +1,49 @@
-import { Connection, createCollection } from "home-assistant-js-websocket";
-import { Store } from "home-assistant-js-websocket/dist/store";
+import type { Connection } from "home-assistant-js-websocket";
+import { createCollection } from "home-assistant-js-websocket";
+import type { Store } from "home-assistant-js-websocket/dist/store";
 import memoizeOne from "memoize-one";
 import { computeStateName } from "../common/entity/compute_state_name";
 import { caseInsensitiveStringCompare } from "../common/string/compare";
 import { debounce } from "../common/util/debounce";
-import { HomeAssistant } from "../types";
-import { LightColor } from "./light";
+import type { HomeAssistant } from "../types";
+import type { LightColor } from "./light";
+import { computeDomain } from "../common/entity/compute_domain";
+import type { RegistryEntry } from "./registry";
 
-type entityCategory = "config" | "diagnostic";
+type EntityCategory = "config" | "diagnostic";
 
 export interface EntityRegistryDisplayEntry {
   entity_id: string;
   name?: string;
+  icon?: string;
   device_id?: string;
   area_id?: string;
+  labels: string[];
   hidden?: boolean;
-  entity_category?: entityCategory;
+  entity_category?: EntityCategory;
   translation_key?: string;
   platform?: string;
   display_precision?: number;
 }
 
-interface EntityRegistryDisplayEntryResponse {
+export interface EntityRegistryDisplayEntryResponse {
   entities: {
     ei: string;
     di?: string;
     ai?: string;
+    lb: string[];
     ec?: number;
     en?: string;
+    ic?: string;
     pl?: string;
     tk?: string;
     hb?: boolean;
     dp?: number;
   }[];
-  entity_categories: Record<number, entityCategory>;
+  entity_categories: Record<number, EntityCategory>;
 }
 
-export interface EntityRegistryEntry {
+export interface EntityRegistryEntry extends RegistryEntry {
   id: string;
   entity_id: string;
   name: string | null;
@@ -45,14 +52,16 @@ export interface EntityRegistryEntry {
   config_entry_id: string | null;
   device_id: string | null;
   area_id: string | null;
+  labels: string[];
   disabled_by: "user" | "device" | "integration" | "config_entry" | null;
   hidden_by: Exclude<EntityRegistryEntry["disabled_by"], "config_entry">;
-  entity_category: entityCategory | null;
+  entity_category: EntityCategory | null;
   has_entity_name: boolean;
   original_name?: string;
   unique_id: string;
   translation_key?: string;
   options: EntityRegistryOptions | null;
+  categories: Record<string, string>;
 }
 
 export interface ExtEntityRegistryEntry extends EntityRegistryEntry {
@@ -87,6 +96,10 @@ export interface LockEntityOptions {
   default_code?: string | null;
 }
 
+export interface AlarmControlPanelEntityOptions {
+  default_code?: string | null;
+}
+
 export interface WeatherEntityOptions {
   precipitation_unit?: string | null;
   pressure_unit?: string | null;
@@ -97,11 +110,13 @@ export interface WeatherEntityOptions {
 
 export interface SwitchAsXEntityOptions {
   entity_id: string;
+  invert: boolean;
 }
 
 export interface EntityRegistryOptions {
   number?: NumberEntityOptions;
   sensor?: SensorEntityOptions;
+  alarm_control_panel?: AlarmControlPanelEntityOptions;
   lock?: LockEntityOptions;
   weather?: WeatherEntityOptions;
   light?: LightEntityOptions;
@@ -124,25 +139,42 @@ export interface EntityRegistryEntryUpdateParams {
     | SensorEntityOptions
     | NumberEntityOptions
     | LockEntityOptions
+    | AlarmControlPanelEntityOptions
     | WeatherEntityOptions
     | LightEntityOptions;
   aliases?: string[];
+  labels?: string[];
+  categories?: Record<string, string | null>;
 }
 
-export const findBatteryEntity = (
+const batteryPriorities = ["sensor", "binary_sensor"];
+export const findBatteryEntity = <T extends { entity_id: string }>(
   hass: HomeAssistant,
-  entities: EntityRegistryEntry[]
-): EntityRegistryEntry | undefined =>
-  entities.find(
-    (entity) =>
-      hass.states[entity.entity_id] &&
-      hass.states[entity.entity_id].attributes.device_class === "battery"
-  );
+  entities: T[]
+): T | undefined => {
+  const batteryEntities = entities
+    .filter(
+      (entity) =>
+        hass.states[entity.entity_id] &&
+        hass.states[entity.entity_id].attributes.device_class === "battery" &&
+        batteryPriorities.includes(computeDomain(entity.entity_id))
+    )
+    .sort(
+      (a, b) =>
+        batteryPriorities.indexOf(computeDomain(a.entity_id)) -
+        batteryPriorities.indexOf(computeDomain(b.entity_id))
+    );
+  if (batteryEntities.length > 0) {
+    return batteryEntities[0];
+  }
 
-export const findBatteryChargingEntity = (
+  return undefined;
+};
+
+export const findBatteryChargingEntity = <T extends { entity_id: string }>(
   hass: HomeAssistant,
-  entities: EntityRegistryEntry[]
-): EntityRegistryEntry | undefined =>
+  entities: T[]
+): T | undefined =>
   entities.find(
     (entity) =>
       hass.states[entity.entity_id] &&
@@ -236,34 +268,6 @@ export const subscribeEntityRegistry = (
     "_entityRegistry",
     fetchEntityRegistry,
     subscribeEntityRegistryUpdates,
-    conn,
-    onChange
-  );
-
-const subscribeEntityRegistryDisplayUpdates = (
-  conn: Connection,
-  store: Store<EntityRegistryDisplayEntryResponse>
-) =>
-  conn.subscribeEvents(
-    debounce(
-      () =>
-        fetchEntityRegistryDisplay(conn).then((entities) =>
-          store.setState(entities, true)
-        ),
-      500,
-      true
-    ),
-    "entity_registry_updated"
-  );
-
-export const subscribeEntityRegistryDisplay = (
-  conn: Connection,
-  onChange: (entities: EntityRegistryDisplayEntryResponse) => void
-) =>
-  createCollection<EntityRegistryDisplayEntryResponse>(
-    "_entityRegistryDisplay",
-    fetchEntityRegistryDisplay,
-    subscribeEntityRegistryDisplayUpdates,
     conn,
     onChange
   );

@@ -2,12 +2,12 @@ import "@material/mwc-list/mwc-list";
 import {
   mdiAccount,
   mdiFile,
-  mdiHomeAssistant,
   mdiOpenInNew,
   mdiPencilOutline,
   mdiWeb,
 } from "@mdi/js";
-import { css, CSSResultGroup, html, LitElement, nothing } from "lit";
+import type { CSSResultGroup } from "lit";
+import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
 import { fireEvent } from "../../../common/dom/fire_event";
@@ -18,16 +18,19 @@ import "../../../components/ha-icon-next";
 import "../../../components/ha-list-item";
 import "../../../components/ha-tip";
 import { showAutomationEditor } from "../../../data/automation";
-import { showScriptEditor } from "../../../data/script";
-import {
+import type {
   Blueprint,
   BlueprintDomain,
-  Blueprints,
   BlueprintSourceType,
+  Blueprints,
+} from "../../../data/blueprint";
+import {
   fetchBlueprints,
   getBlueprintSourceType,
 } from "../../../data/blueprint";
-import { HassDialog } from "../../../dialogs/make-dialog-manager";
+import { showScriptEditor } from "../../../data/script";
+import type { HassDialog } from "../../../dialogs/make-dialog-manager";
+import { mdiHomeAssistant } from "../../../resources/home-assistant-logo-svg";
 import { haStyle, haStyleDialog } from "../../../resources/styles";
 import type { HomeAssistant } from "../../../types";
 import { documentationUrl } from "../../../util/documentation-url";
@@ -58,11 +61,12 @@ class DialogNewAutomation extends LitElement implements HassDialog {
     });
   }
 
-  public closeDialog(): void {
+  public closeDialog() {
     if (this._opened) {
       fireEvent(this, "dialog-closed", { dialog: this.localName });
     }
     this._opened = false;
+    return true;
   }
 
   private _processedBlueprints = memoizeOne((blueprints?: Blueprints) => {
@@ -202,7 +206,6 @@ class DialogNewAutomation extends LitElement implements HassDialog {
       return;
     }
     const path = (ev.currentTarget! as any).path;
-    this.closeDialog();
     if (this._mode === "script") {
       showScriptEditor({ use_blueprint: { path } });
     } else {
@@ -214,7 +217,6 @@ class DialogNewAutomation extends LitElement implements HassDialog {
     if (!shouldHandleRequestSelectedEvent(ev)) {
       return;
     }
-    this.closeDialog();
     if (this._mode === "script") {
       showScriptEditor();
     } else {

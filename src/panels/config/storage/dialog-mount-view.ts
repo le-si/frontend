@@ -1,26 +1,29 @@
-import { css, CSSResultGroup, html, LitElement, nothing } from "lit";
+import { mdiHelpCircle } from "@mdi/js";
+import type { CSSResultGroup } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
-import { mdiHelpCircle } from "@mdi/js";
 import { fireEvent } from "../../../common/dom/fire_event";
+import type { LocalizeFunc } from "../../../common/translations/localize";
+import { computeRTLDirection } from "../../../common/util/compute_rtl";
+import "../../../components/buttons/ha-progress-button";
+import type { HaProgressButton } from "../../../components/buttons/ha-progress-button";
 import "../../../components/ha-form/ha-form";
+import type { SchemaUnion } from "../../../components/ha-form/types";
 import "../../../components/ha-icon-button";
 import { extractApiErrorMessage } from "../../../data/hassio/common";
+import type { SupervisorMountRequestParams } from "../../../data/supervisor/mounts";
 import {
   createSupervisorMount,
   removeSupervisorMount,
-  SupervisorMountRequestParams,
   SupervisorMountType,
   SupervisorMountUsage,
   updateSupervisorMount,
 } from "../../../data/supervisor/mounts";
 import { haStyle, haStyleDialog } from "../../../resources/styles";
-import { HomeAssistant } from "../../../types";
-import { MountViewDialogParams } from "./show-dialog-view-mount";
-import { LocalizeFunc } from "../../../common/translations/localize";
-import type { SchemaUnion } from "../../../components/ha-form/types";
+import type { HomeAssistant } from "../../../types";
 import { documentationUrl } from "../../../util/documentation-url";
-import { computeRTLDirection } from "../../../common/util/compute_rtl";
+import type { MountViewDialogParams } from "./show-dialog-view-mount";
 
 const mountSchema = memoizeOne(
   (
@@ -90,59 +93,59 @@ const mountSchema = memoizeOne(
             },
           ] as const)
         : mountType === "cifs"
-        ? ([
-            ...(showCIFSVersion
-              ? ([
-                  {
-                    name: "version",
-                    required: true,
-                    selector: {
-                      select: {
-                        options: [
-                          {
-                            label: localize(
-                              "ui.panel.config.storage.network_mounts.cifs_versions.auto"
-                            ),
-                            value: "auto",
-                          },
-                          {
-                            label: localize(
-                              "ui.panel.config.storage.network_mounts.cifs_versions.legacy",
-                              { version: "2.0" }
-                            ),
-                            value: "2.0",
-                          },
-                          {
-                            label: localize(
-                              "ui.panel.config.storage.network_mounts.cifs_versions.legacy",
-                              { version: "1.0" }
-                            ),
-                            value: "1.0",
-                          },
-                        ],
-                        mode: "dropdown",
+          ? ([
+              ...(showCIFSVersion
+                ? ([
+                    {
+                      name: "version",
+                      required: true,
+                      selector: {
+                        select: {
+                          options: [
+                            {
+                              label: localize(
+                                "ui.panel.config.storage.network_mounts.cifs_versions.auto"
+                              ),
+                              value: "auto",
+                            },
+                            {
+                              label: localize(
+                                "ui.panel.config.storage.network_mounts.cifs_versions.legacy",
+                                { version: "2.0" }
+                              ),
+                              value: "2.0",
+                            },
+                            {
+                              label: localize(
+                                "ui.panel.config.storage.network_mounts.cifs_versions.legacy",
+                                { version: "1.0" }
+                              ),
+                              value: "1.0",
+                            },
+                          ],
+                          mode: "dropdown",
+                        },
                       },
                     },
-                  },
-                ] as const)
-              : ([] as const)),
-            {
-              name: "share",
-              required: true,
-              selector: { text: {} },
-            },
-            {
-              name: "username",
-              required: false,
-              selector: { text: {} },
-            },
-            {
-              name: "password",
-              required: false,
-              selector: { text: { type: "password" } },
-            },
-          ] as const)
-        : ([] as const)),
+                  ] as const)
+                : ([] as const)),
+              {
+                name: "share",
+                required: true,
+                selector: { text: {} },
+              },
+              {
+                name: "username",
+                required: false,
+                selector: { text: {} },
+              },
+              {
+                name: "password",
+                required: false,
+                selector: { text: { type: "password" } },
+              },
+            ] as const)
+          : ([] as const)),
     ] as const
 );
 
@@ -269,8 +272,8 @@ class ViewMountDialog extends LitElement {
             : nothing}
         </div>
 
-        <mwc-button
-          .disabled=${this._waiting}
+        <ha-progress-button
+          .progress=${this._waiting}
           slot="primaryAction"
           @click=${this._connectMount}
         >
@@ -281,7 +284,7 @@ class ViewMountDialog extends LitElement {
             : this.hass.localize(
                 "ui.panel.config.storage.network_mounts.connect"
               )}
-        </mwc-button>
+        </ha-progress-button>
       </ha-dialog>
     `;
   }
@@ -333,7 +336,8 @@ class ViewMountDialog extends LitElement {
     }
   }
 
-  private async _connectMount() {
+  private async _connectMount(ev) {
+    const progressButton = ev.target as HaProgressButton;
     this._error = undefined;
     this._waiting = true;
     const mountData = { ...this._data! };
@@ -349,6 +353,7 @@ class ViewMountDialog extends LitElement {
     } catch (err: any) {
       this._error = extractApiErrorMessage(err);
       this._waiting = false;
+      progressButton.actionError();
       if (this._data!.type === "cifs" && !this._showCIFSVersion) {
         this._showCIFSVersion = true;
       }

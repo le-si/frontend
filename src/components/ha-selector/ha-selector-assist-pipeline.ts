@@ -1,14 +1,14 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators";
-import { AssistPipelineSelector } from "../../data/selector";
-import { HomeAssistant } from "../../types";
+import type { AssistPipelineSelector } from "../../data/selector";
+import type { HomeAssistant } from "../../types";
 import "../ha-assist-pipeline-picker";
 
 @customElement("ha-selector-assist_pipeline")
 export class HaAssistPipelineSelector extends LitElement {
-  @property() public hass!: HomeAssistant;
+  @property({ attribute: false }) public hass!: HomeAssistant;
 
-  @property() public selector!: AssistPipelineSelector;
+  @property({ attribute: false }) public selector!: AssistPipelineSelector;
 
   @property() public value?: any;
 
@@ -21,14 +21,19 @@ export class HaAssistPipelineSelector extends LitElement {
   @property({ type: Boolean }) public required = true;
 
   protected render() {
-    return html`<ha-assist-pipeline-picker
-      .hass=${this.hass}
-      .value=${this.value}
-      .label=${this.label}
-      .helper=${this.helper}
-      .disabled=${this.disabled}
-      .required=${this.required}
-    ></ha-assist-pipeline-picker>`;
+    return html`
+      <ha-assist-pipeline-picker
+        .hass=${this.hass}
+        .value=${this.value}
+        .label=${this.label}
+        .helper=${this.helper}
+        .disabled=${this.disabled}
+        .required=${this.required}
+        .includeLastUsed=${Boolean(
+          this.selector.assist_pipeline?.include_last_used
+        )}
+      ></ha-assist-pipeline-picker>
+    `;
   }
 
   static styles = css`

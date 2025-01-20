@@ -1,29 +1,29 @@
-import { ComboBoxLitRenderer } from "@vaadin/combo-box/lit";
+import type { ComboBoxLitRenderer } from "@vaadin/combo-box/lit";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
 import { isComponentLoaded } from "../common/config/is_component_loaded";
 import { fireEvent } from "../common/dom/fire_event";
 import { stringCompare } from "../common/string/compare";
-import { fetchHassioAddonsInfo, HassioAddonInfo } from "../data/hassio/addon";
-import { HomeAssistant, ValueChangedEvent } from "../types";
+import type { HassioAddonInfo } from "../data/hassio/addon";
+import { fetchHassioAddonsInfo } from "../data/hassio/addon";
+import type { HomeAssistant, ValueChangedEvent } from "../types";
 import "./ha-alert";
 import "./ha-combo-box";
 import type { HaComboBox } from "./ha-combo-box";
 import "./ha-list-item";
 
-const rowRenderer: ComboBoxLitRenderer<HassioAddonInfo> = (
-  item
-) => html`<ha-list-item twoline graphic="icon">
-  <span>${item.name}</span>
-  <span slot="secondary">${item.slug}</span>
-  ${item.icon
-    ? html`<img
-        alt=""
-        slot="graphic"
-        .src="/api/hassio/addons/${item.slug}/icon"
-      />`
-    : ""}
-</ha-list-item>`;
+const rowRenderer: ComboBoxLitRenderer<HassioAddonInfo> = (item) =>
+  html`<ha-list-item twoline graphic="icon">
+    <span>${item.name}</span>
+    <span slot="secondary">${item.slug}</span>
+    ${item.icon
+      ? html`<img
+          alt=""
+          slot="graphic"
+          .src="/api/hassio/addons/${item.slug}/icon"
+        />`
+      : ""}
+  </ha-list-item>`;
 
 @customElement("ha-addon-picker")
 class HaAddonPicker extends LitElement {
@@ -98,7 +98,7 @@ class HaAddonPicker extends LitElement {
           "ui.components.addon-picker.error.no_supervisor"
         );
       }
-    } catch (err: any) {
+    } catch (_err: any) {
       this._error = this.hass.localize(
         "ui.components.addon-picker.error.fetch_addons"
       );

@@ -1,7 +1,7 @@
-import { HassEntity } from "home-assistant-js-websocket";
-import { PropertyValues } from "lit";
-import { EntityRegistryDisplayEntry } from "../../../data/entity_registry";
-import { HomeAssistant } from "../../../types";
+import type { HassEntity } from "home-assistant-js-websocket";
+import type { PropertyValues } from "lit";
+import type { EntityRegistryDisplayEntry } from "../../../data/entity_registry";
+import type { HomeAssistant } from "../../../types";
 import { processConfigEntities } from "./process-config-entities";
 
 export function hasConfigChanged(
@@ -10,6 +10,10 @@ export function hasConfigChanged(
 ): boolean {
   if (changedProps.has("_config")) {
     return true;
+  }
+
+  if (!changedProps.has("hass")) {
+    return false;
   }
 
   const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
@@ -22,6 +26,11 @@ export function hasConfigChanged(
     oldHass.themes !== element.hass!.themes ||
     oldHass.locale !== element.hass!.locale ||
     oldHass.localize !== element.hass.localize ||
+    oldHass.formatEntityState !== element.hass.formatEntityState ||
+    oldHass.formatEntityAttributeName !==
+      element.hass.formatEntityAttributeName ||
+    oldHass.formatEntityAttributeValue !==
+      element.hass.formatEntityAttributeValue ||
     oldHass.config.state !== element.hass.config.state
   ) {
     return true;
@@ -64,6 +73,10 @@ export function hasConfigOrEntityChanged(
     return true;
   }
 
+  if (!changedProps.has("hass")) {
+    return false;
+  }
+
   const oldHass = changedProps.get("hass") as HomeAssistant;
   const newHass = element.hass as HomeAssistant;
 
@@ -80,6 +93,10 @@ export function hasConfigOrEntitiesChanged(
 ): boolean {
   if (hasConfigChanged(element, changedProps)) {
     return true;
+  }
+
+  if (!changedProps.has("hass")) {
+    return false;
   }
 
   const oldHass = changedProps.get("hass") as HomeAssistant;

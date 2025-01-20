@@ -1,4 +1,5 @@
-import { html, LitElement, PropertyValues } from "lit";
+import type { PropertyValues } from "lit";
+import { html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators";
 import {
   assert,
@@ -42,6 +43,7 @@ const SCHEMA = [
           "editable",
           "effect_list",
           "entity_picture",
+          "event_types",
           "fan_modes",
           "fan_speed_list",
           "forecast",
@@ -85,8 +87,8 @@ export class HaStateCondition extends LitElement implements ConditionElement {
 
   @property({ type: Boolean }) public disabled = false;
 
-  public static get defaultConfig() {
-    return { entity_id: "", state: "" };
+  public static get defaultConfig(): StateCondition {
+    return { condition: "state", entity_id: "", state: "" };
   }
 
   public shouldUpdate(changedProperties: PropertyValues) {

@@ -1,3 +1,8 @@
+import type {
+  BarControllerChartOptions,
+  BarControllerDatasetOptions,
+} from "chart.js";
+
 export interface TimeLineData {
   start: Date;
   end: Date;
@@ -12,7 +17,6 @@ declare module "chart.js" {
       datasetOptions: BarControllerDatasetOptions;
       defaultDataPoint: TimeLineData;
       parsedDataType: any;
-      scales: "timeline";
     };
   }
 }

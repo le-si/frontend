@@ -1,10 +1,11 @@
 import { mdiClose } from "@mdi/js";
-import { css, CSSResultGroup, html, LitElement, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property } from "lit/decorators";
 import { guard } from "lit/directives/guard";
 import memoizeOne from "memoize-one";
 import { fireEvent } from "../../common/dom/fire_event";
-import { fetchUsers, User } from "../../data/user";
+import type { User } from "../../data/user";
+import { fetchUsers } from "../../data/user";
 import type { ValueChangedEvent, HomeAssistant } from "../../types";
 import "../ha-icon-button";
 import "./ha-user-picker";
@@ -13,7 +14,7 @@ import "./ha-user-picker";
 class HaUsersPickerLight extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
-  @property() public value?: string[];
+  @property({ attribute: false }) public value?: string[];
 
   @property({ attribute: "picked-user-label" })
   public pickedUserLabel?: string;
@@ -23,6 +24,8 @@ class HaUsersPickerLight extends LitElement {
 
   @property({ attribute: false })
   public users?: User[];
+
+  @property({ type: Boolean }) public disabled = false;
 
   protected firstUpdated(changedProps) {
     super.firstUpdated(changedProps);
@@ -57,6 +60,7 @@ class HaUsersPickerLight extends LitElement {
                   this.users,
                   notSelectedUsers
                 )}
+                .disabled=${this.disabled}
                 @value-changed=${this._userChanged}
               ></ha-user-picker>
               <ha-icon-button
@@ -78,7 +82,7 @@ class HaUsersPickerLight extends LitElement {
         this.hass!.localize("ui.components.user-picker.add_user")}
         .hass=${this.hass}
         .users=${notSelectedUsers}
-        .disabled=${!notSelectedUsers?.length}
+        .disabled=${this.disabled || !notSelectedUsers?.length}
         @value-changed=${this._addUser}
       ></ha-user-picker>
     `;
@@ -149,17 +153,15 @@ class HaUsersPickerLight extends LitElement {
     this._updateUsers(this._currentUsers.filter((user) => user !== userId));
   }
 
-  static get styles(): CSSResultGroup {
-    return css`
-      :host {
-        display: block;
-      }
-      div {
-        display: flex;
-        align-items: center;
-      }
-    `;
-  }
+  static styles = css`
+    :host {
+      display: block;
+    }
+    div {
+      display: flex;
+      align-items: center;
+    }
+  `;
 }
 
 declare global {

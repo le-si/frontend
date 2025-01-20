@@ -3,15 +3,17 @@ import { customElement, property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
 import { any, assert, assign, object, optional, string } from "superstruct";
 import { fireEvent } from "../../../../common/dom/fire_event";
-import { LocalizeFunc } from "../../../../common/translations/localize";
+import type { LocalizeFunc } from "../../../../common/translations/localize";
 import { deepEqual } from "../../../../common/util/deep-equal";
 import "../../../../components/ha-form/ha-form";
 import type { SchemaUnion } from "../../../../components/ha-form/types";
+import type {
+  StatisticsMetaData,
+  StatisticType,
+} from "../../../../data/recorder";
 import {
   getStatisticMetadata,
-  StatisticsMetaData,
   statisticsMetaHasType,
-  StatisticType,
 } from "../../../../data/recorder";
 import type { HomeAssistant } from "../../../../types";
 import type { StatisticCardConfig } from "../../cards/types";
@@ -196,7 +198,7 @@ export class HuiStatisticCardEditor
   }
 
   private async _valueChanged(ev: CustomEvent) {
-    const config = ev.detail.value as StatisticCardConfig;
+    const config = { ...ev.detail.value } as StatisticCardConfig;
     Object.keys(config).forEach((k) => config[k] === "" && delete config[k]);
 
     if (typeof config.period === "string") {

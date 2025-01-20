@@ -9,11 +9,19 @@ export interface AssistPipeline {
   language: string;
   conversation_engine: string;
   conversation_language: string | null;
+  prefer_local_intents?: boolean;
   stt_engine: string | null;
   stt_language: string | null;
   tts_engine: string | null;
   tts_language: string | null;
   tts_voice: string | null;
+  wake_word_entity: string | null;
+  wake_word_id: string | null;
+}
+
+export interface AssistDevice {
+  device_id: string;
+  pipeline_entity: string;
 }
 
 export interface AssistPipelineMutableParams {
@@ -21,14 +29,17 @@ export interface AssistPipelineMutableParams {
   language: string;
   conversation_engine: string;
   conversation_language: string | null;
+  prefer_local_intents?: boolean;
   stt_engine: string | null;
   stt_language: string | null;
   tts_engine: string | null;
   tts_language: string | null;
   tts_voice: string | null;
+  wake_word_entity: string | null;
+  wake_word_id: string | null;
 }
 
-export interface assistRunListing {
+export interface AssistRunListing {
   pipeline_run_id: string;
   timestamp: string;
 }
@@ -61,6 +72,19 @@ interface PipelineErrorEvent extends PipelineEventBase {
   };
 }
 
+interface PipelineWakeWordStartEvent extends PipelineEventBase {
+  type: "wake_word-start";
+  data: {
+    engine: string;
+    metadata: SpeechMetadata;
+  };
+}
+
+interface PipelineWakeWordEndEvent extends PipelineEventBase {
+  type: "wake_word-end";
+  data: { wake_word_output: { ww_id: string; timestamp: number } };
+}
+
 interface PipelineSTTStartEvent extends PipelineEventBase {
   type: "stt-start";
   data: {
@@ -80,12 +104,14 @@ interface PipelineIntentStartEvent extends PipelineEventBase {
   data: {
     engine: string;
     language: string;
+    prefer_local_intents: boolean;
     intent_input: string;
   };
 }
 interface PipelineIntentEndEvent extends PipelineEventBase {
   type: "intent-end";
   data: {
+    processed_locally: boolean;
     intent_output: ConversationResult;
   };
 }
@@ -110,6 +136,8 @@ export type PipelineRunEvent =
   | PipelineRunStartEvent
   | PipelineRunEndEvent
   | PipelineErrorEvent
+  | PipelineWakeWordStartEvent
+  | PipelineWakeWordEndEvent
   | PipelineSTTStartEvent
   | PipelineSTTEndEvent
   | PipelineIntentStartEvent
@@ -126,6 +154,14 @@ export type PipelineRunOptions = (
       start_stage: "stt";
       input: { sample_rate: number };
     }
+  | {
+      start_stage: "wake_word";
+      input: {
+        sample_rate: number;
+        timeout?: number;
+        audio_seconds_to_buffer?: number;
+      };
+    }
 ) & {
   end_stage: "stt" | "intent" | "tts";
   pipeline?: string;
@@ -135,9 +171,11 @@ export type PipelineRunOptions = (
 export interface PipelineRun {
   init_options?: PipelineRunOptions;
   events: PipelineRunEvent[];
-  stage: "ready" | "stt" | "intent" | "tts" | "done" | "error";
+  stage: "ready" | "wake_word" | "stt" | "intent" | "tts" | "done" | "error";
   run: PipelineRunStartEvent["data"];
   error?: PipelineErrorEvent["data"];
+  wake_word?: PipelineWakeWordStartEvent["data"] &
+    Partial<PipelineWakeWordEndEvent["data"]> & { done: boolean };
   stt?: PipelineSTTStartEvent["data"] &
     Partial<PipelineSTTEndEvent["data"]> & { done: boolean };
   intent?: PipelineIntentStartEvent["data"] &
@@ -167,7 +205,18 @@ export const processEvent = (
     return undefined;
   }
 
-  if (event.type === "stt-start") {
+  if (event.type === "wake_word-start") {
+    run = {
+      ...run,
+      stage: "wake_word",
+      wake_word: { ...event.data, done: false },
+    };
+  } else if (event.type === "wake_word-end") {
+    run = {
+      ...run,
+      wake_word: { ...run.wake_word!, ...event.data, done: true },
+    };
+  } else if (event.type === "stt-start") {
     run = {
       ...run,
       stage: "stt",
@@ -254,7 +303,7 @@ export const listAssistPipelineRuns = (
   pipeline_id: string
 ) =>
   hass.callWS<{
-    pipeline_runs: assistRunListing[];
+    pipeline_runs: AssistRunListing[];
   }>({
     type: "assist_pipeline/pipeline_debug/list",
     pipeline_id,
@@ -317,7 +366,7 @@ export const setAssistPipelinePreferred = (
   });
 
 export const deleteAssistPipeline = (hass: HomeAssistant, pipelineId: string) =>
-  hass.callWS<void>({
+  hass.callWS<undefined>({
     type: "assist_pipeline/pipeline/delete",
     pipeline_id: pipelineId,
   });
@@ -325,4 +374,9 @@ export const deleteAssistPipeline = (hass: HomeAssistant, pipelineId: string) =>
 export const fetchAssistPipelineLanguages = (hass: HomeAssistant) =>
   hass.callWS<{ languages: string[] }>({
     type: "assist_pipeline/language/list",
+  });
+
+export const listAssistDevices = (hass: HomeAssistant) =>
+  hass.callWS<AssistDevice[]>({
+    type: "assist_pipeline/device/list",
   });

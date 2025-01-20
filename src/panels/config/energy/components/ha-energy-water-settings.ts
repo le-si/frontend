@@ -1,27 +1,26 @@
 import "@material/mwc-button/mwc-button";
 import { mdiDelete, mdiWater, mdiPencil } from "@mdi/js";
-import { CSSResultGroup, html, LitElement, TemplateResult } from "lit";
+import type { CSSResultGroup, TemplateResult } from "lit";
+import { html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import "../../../../components/ha-card";
 import "../../../../components/ha-icon-button";
-import {
+import type {
   EnergyPreferences,
   EnergyPreferencesValidation,
   EnergyValidationIssue,
   WaterSourceTypeEnergyPreference,
-  saveEnergyPreferences,
 } from "../../../../data/energy";
-import {
-  StatisticsMetaData,
-  getStatisticLabel,
-} from "../../../../data/recorder";
+import { saveEnergyPreferences } from "../../../../data/energy";
+import type { StatisticsMetaData } from "../../../../data/recorder";
+import { getStatisticLabel } from "../../../../data/recorder";
 import {
   showAlertDialog,
   showConfirmationDialog,
 } from "../../../../dialogs/generic/show-dialog-box";
 import { haStyle } from "../../../../resources/styles";
-import { HomeAssistant } from "../../../../types";
+import type { HomeAssistant } from "../../../../types";
 import { documentationUrl } from "../../../../util/documentation-url";
 import { showEnergySettingsWaterDialog } from "../dialogs/show-dialogs-energy";
 import "./ha-energy-validation-result";
@@ -75,13 +74,12 @@ export class EnergyWaterSettings extends LitElement {
             >
           </p>
           ${waterValidation.map(
-            (result) =>
-              html`
-                <ha-energy-validation-result
-                  .hass=${this.hass}
-                  .issues=${result}
-                ></ha-energy-validation-result>
-              `
+            (result) => html`
+              <ha-energy-validation-result
+                .hass=${this.hass}
+                .issues=${result}
+              ></ha-energy-validation-result>
+            `
           )}
           <h3>
             ${this.hass.localize(
@@ -136,6 +134,9 @@ export class EnergyWaterSettings extends LitElement {
 
   private _addSource() {
     showEnergySettingsWaterDialog(this, {
+      water_sources: this.preferences.energy_sources.filter(
+        (src) => src.type === "water"
+      ) as WaterSourceTypeEnergyPreference[],
       saveCallback: async (source) => {
         delete source.unit_of_measurement;
         await this._savePreferences({
@@ -152,6 +153,9 @@ export class EnergyWaterSettings extends LitElement {
     showEnergySettingsWaterDialog(this, {
       source: { ...origSource },
       metadata: this.statsMetadata?.[origSource.stat_energy_from],
+      water_sources: this.preferences.energy_sources.filter(
+        (src) => src.type === "water"
+      ) as WaterSourceTypeEnergyPreference[],
       saveCallback: async (newSource) => {
         await this._savePreferences({
           ...this.preferences,

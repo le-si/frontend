@@ -1,31 +1,38 @@
-import {
+import type { DurationFormatConstructor } from "@formatjs/intl-durationformat/src/types";
+import type {
   Auth,
   Connection,
   HassConfig,
   HassEntities,
+  HassEntity,
   HassServices,
   HassServiceTarget,
   MessageBase,
 } from "home-assistant-js-websocket";
-import { LocalizeFunc } from "./common/translations/localize";
-import { AreaRegistryEntry } from "./data/area_registry";
-import { DeviceRegistryEntry } from "./data/device_registry";
-import { EntityRegistryDisplayEntry } from "./data/entity_registry";
-import { CoreFrontendUserData } from "./data/frontend";
-import { FrontendLocaleData, getHassTranslations } from "./data/translation";
-import { Themes } from "./data/ws-themes";
-import { ExternalMessaging } from "./external_app/external_messaging";
+import type { LocalizeFunc } from "./common/translations/localize";
+import type { AreaRegistryEntry } from "./data/area_registry";
+import type { DeviceRegistryEntry } from "./data/device_registry";
+import type { EntityRegistryDisplayEntry } from "./data/entity_registry";
+import type { FloorRegistryEntry } from "./data/floor_registry";
+import type { CoreFrontendUserData } from "./data/frontend";
+import type {
+  FrontendLocaleData,
+  getHassTranslations,
+} from "./data/translation";
+import type { Themes } from "./data/ws-themes";
+import type { ExternalMessaging } from "./external_app/external_messaging";
 
 declare global {
-  /* eslint-disable no-var, no-redeclare */
+  /* eslint-disable no-var, @typescript-eslint/naming-convention */
   var __DEV__: boolean;
   var __DEMO__: boolean;
-  var __BUILD__: "latest" | "es5";
+  var __BUILD__: "modern" | "legacy";
   var __VERSION__: string;
   var __STATIC_PATH__: string;
   var __BACKWARDS_COMPAT__: boolean;
   var __SUPERVISOR__: boolean;
-  /* eslint-enable no-var, no-redeclare */
+  var __HASS_URL__: string;
+  /* eslint-enable no-var, @typescript-eslint/naming-convention */
 
   interface Window {
     // Custom panel entry point url
@@ -48,7 +55,6 @@ declare global {
     };
     change: undefined;
     "hass-logout": undefined;
-    "iron-resize": undefined;
     "config-refresh": undefined;
     "hass-api-called": {
       success: boolean;
@@ -56,9 +62,16 @@ declare global {
     };
   }
 
-  // For loading workers in webpack
+  // For loading workers in rspack
   interface ImportMeta {
     url: string;
+  }
+
+  // Intl.DurationFormat is not yet part of the TypeScript standard
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Intl {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    const DurationFormat: DurationFormatConstructor;
   }
 }
 
@@ -120,11 +133,10 @@ export interface PanelInfo<T = Record<string, any> | null> {
   icon: string | null;
   title: string | null;
   url_path: string;
+  config_panel_domain?: string;
 }
 
-export interface Panels {
-  [name: string]: PanelInfo;
-}
+export type Panels = Record<string, PanelInfo>;
 
 export interface CalendarViewChanged {
   end: Date;
@@ -137,6 +149,8 @@ export type FullCalendarView =
   | "dayGridWeek"
   | "dayGridDay"
   | "listWeek";
+
+export type ThemeMode = "auto" | "light" | "dark";
 
 export interface ToggleButton {
   label: string;
@@ -152,11 +166,10 @@ export interface Translation {
 
 export interface TranslationMetadata {
   fragments: string[];
-  translations: {
-    [lang: string]: Translation;
-  };
+  translations: Record<string, Translation>;
 }
 
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
 export type TranslationDict = typeof import("./translations/en.json");
 
 export interface IconMetaFile {
@@ -177,9 +190,7 @@ export interface Notification {
   created_at: string;
 }
 
-export interface Resources {
-  [language: string]: Record<string, string>;
-}
+export type Resources = Record<string, Record<string, string>>;
 
 export interface Context {
   id: string;
@@ -189,6 +200,7 @@ export interface Context {
 
 export interface ServiceCallResponse {
   context: Context;
+  response?: any;
 }
 
 export interface ServiceCallRequest {
@@ -203,9 +215,10 @@ export interface HomeAssistant {
   connection: Connection;
   connected: boolean;
   states: HassEntities;
-  entities: { [id: string]: EntityRegistryDisplayEntry };
-  devices: { [id: string]: DeviceRegistryEntry };
-  areas: { [id: string]: AreaRegistryEntry };
+  entities: Record<string, EntityRegistryDisplayEntry>;
+  devices: Record<string, DeviceRegistryEntry>;
+  areas: Record<string, AreaRegistryEntry>;
+  floors: Record<string, FloorRegistryEntry>;
   services: HassServices;
   config: HassConfig;
   themes: Themes;
@@ -228,6 +241,7 @@ export interface HomeAssistant {
   suspendWhenHidden: boolean;
   enableShortcuts: boolean;
   vibrate: boolean;
+  debugConnection: boolean;
   dockedSidebar: "docked" | "always_hidden" | "auto";
   defaultPanel: string;
   moreInfoEntityId: string | null;
@@ -238,7 +252,9 @@ export interface HomeAssistant {
     domain: ServiceCallRequest["domain"],
     service: ServiceCallRequest["service"],
     serviceData?: ServiceCallRequest["serviceData"],
-    target?: ServiceCallRequest["target"]
+    target?: ServiceCallRequest["target"],
+    notifyOnError?: boolean,
+    returnResponse?: boolean
   ): Promise<ServiceCallResponse>;
   callApi<T>(
     method: "GET" | "POST" | "PUT" | "DELETE",
@@ -246,6 +262,13 @@ export interface HomeAssistant {
     parameters?: Record<string, any>,
     headers?: Record<string, string>
   ): Promise<T>;
+  callApiRaw( // introduced in 2024.11
+    method: "GET" | "POST" | "PUT" | "DELETE",
+    path: string,
+    parameters?: Record<string, any>,
+    headers?: Record<string, string>,
+    signal?: AbortSignal
+  ): Promise<Response>;
   fetchWithAuth(path: string, init?: Record<string, any>): Promise<Response>;
   sendWS(msg: MessageBase): void;
   callWS<T>(msg: MessageBase): Promise<T>;
@@ -255,6 +278,13 @@ export interface HomeAssistant {
     configFlow?: Parameters<typeof getHassTranslations>[4]
   ): Promise<LocalizeFunc>;
   loadFragmentTranslation(fragment: string): Promise<LocalizeFunc | undefined>;
+  formatEntityState(stateObj: HassEntity, state?: string): string;
+  formatEntityAttributeValue(
+    stateObj: HassEntity,
+    attribute: string,
+    value?: any
+  ): string;
+  formatEntityAttributeName(stateObj: HassEntity, attribute: string): string;
 }
 
 export interface Route {
@@ -280,5 +310,7 @@ export type AsyncReturnType<T extends (...args: any) => any> = T extends (
 ) => Promise<infer U>
   ? U
   : T extends (...args: any) => infer U
-  ? U
-  : never;
+    ? U
+    : never;
+
+export type Entries<T> = [keyof T, T[keyof T]][];

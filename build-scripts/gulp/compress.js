@@ -1,45 +1,86 @@
 // Tasks to compress
 
+import { constants } from "node:zlib";
 import gulp from "gulp";
+import brotli from "gulp-brotli";
 import zopfli from "gulp-zopfli-green";
-import merge from "merge-stream";
-import path from "path";
 import paths from "../paths.cjs";
 
+const filesGlob = "*.{js,json,css,svg,xml}";
+const brotliOptions = {
+  skipLarger: true,
+  params: {
+    [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY,
+  },
+};
 const zopfliOptions = { threshold: 150 };
 
-gulp.task("compress-app", function compressApp() {
-  const jsLatest = gulp
-    .src(path.resolve(paths.app_output_latest, "**/*.js"))
-    .pipe(zopfli(zopfliOptions))
-    .pipe(gulp.dest(paths.app_output_latest));
+const compressModern = (rootDir, modernDir, compress) =>
+  gulp
+    .src([`${modernDir}/**/${filesGlob}`, `${rootDir}/sw-modern.js`], {
+      base: rootDir,
+      allowEmpty: true,
+    })
+    .pipe(compress === "zopfli" ? zopfli(zopfliOptions) : brotli(brotliOptions))
+    .pipe(gulp.dest(rootDir));
 
-  const jsEs5 = gulp
-    .src(path.resolve(paths.app_output_es5, "**/*.js"))
-    .pipe(zopfli(zopfliOptions))
-    .pipe(gulp.dest(paths.app_output_es5));
+const compressOther = (rootDir, modernDir, compress) =>
+  gulp
+    .src(
+      [
+        `${rootDir}/**/${filesGlob}`,
+        `!${modernDir}/**/${filesGlob}`,
+        `!${rootDir}/{sw-modern,service_worker}.js`,
+        `${rootDir}/{authorize,onboarding}.html`,
+      ],
+      { base: rootDir, allowEmpty: true }
+    )
+    .pipe(compress === "zopfli" ? zopfli(zopfliOptions) : brotli(brotliOptions))
+    .pipe(gulp.dest(rootDir));
 
-  const polyfills = gulp
-    .src(path.resolve(paths.app_output_static, "polyfills/*.js"))
-    .pipe(zopfli(zopfliOptions))
-    .pipe(gulp.dest(path.resolve(paths.app_output_static, "polyfills")));
+const compressAppModernBrotli = () =>
+  compressModern(paths.app_output_root, paths.app_output_latest, "brotli");
+const compressAppModernZopfli = () =>
+  compressModern(paths.app_output_root, paths.app_output_latest, "zopfli");
 
-  const translations = gulp
-    .src(path.resolve(paths.app_output_static, "translations/**/*.json"))
-    .pipe(zopfli(zopfliOptions))
-    .pipe(gulp.dest(path.resolve(paths.app_output_static, "translations")));
+const compressHassioModernBrotli = () =>
+  compressModern(
+    paths.hassio_output_root,
+    paths.hassio_output_latest,
+    "brotli"
+  );
+const compressHassioModernZopfli = () =>
+  compressModern(
+    paths.hassio_output_root,
+    paths.hassio_output_latest,
+    "zopfli"
+  );
 
-  const icons = gulp
-    .src(path.resolve(paths.app_output_static, "mdi/*.json"))
-    .pipe(zopfli(zopfliOptions))
-    .pipe(gulp.dest(path.resolve(paths.app_output_static, "mdi")));
+const compressAppOtherBrotli = () =>
+  compressOther(paths.app_output_root, paths.app_output_latest, "brotli");
+const compressAppOtherZopfli = () =>
+  compressOther(paths.app_output_root, paths.app_output_latest, "zopfli");
 
-  return merge(jsLatest, jsEs5, polyfills, translations, icons);
-});
+const compressHassioOtherBrotli = () =>
+  compressOther(paths.hassio_output_root, paths.hassio_output_latest, "brotli");
+const compressHassioOtherZopfli = () =>
+  compressOther(paths.hassio_output_root, paths.hassio_output_latest, "zopfli");
 
-gulp.task("compress-hassio", function compressApp() {
-  return gulp
-    .src(path.resolve(paths.hassio_output_root, "**/*.js"))
-    .pipe(zopfli(zopfliOptions))
-    .pipe(gulp.dest(paths.hassio_output_root));
-});
+gulp.task(
+  "compress-app",
+  gulp.parallel(
+    compressAppModernBrotli,
+    compressAppOtherBrotli,
+    compressAppModernZopfli,
+    compressAppOtherZopfli
+  )
+);
+gulp.task(
+  "compress-hassio",
+  gulp.parallel(
+    compressHassioModernBrotli,
+    compressHassioOtherBrotli,
+    compressHassioModernZopfli,
+    compressHassioOtherZopfli
+  )
+);

@@ -1,11 +1,8 @@
-import { css, CSSResultGroup, html, LitElement, TemplateResult } from "lit";
+import type { TemplateResult } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators";
-import { computeAttributeValueDisplay } from "../common/entity/compute_attribute_display";
-import { computeStateDisplay } from "../common/entity/compute_state_display";
-import { formatNumber } from "../common/number/format_number";
-import { blankBeforePercent } from "../common/translations/blank_before_percent";
 import { isUnavailableState, OFF } from "../data/entity";
-import { HumidifierEntity } from "../data/humidifier";
+import type { HumidifierEntity } from "../data/humidifier";
 import type { HomeAssistant } from "../types";
 
 @customElement("ha-humidifier-state")
@@ -23,12 +20,8 @@ class HaHumidifierState extends LitElement {
                 ${this._localizeState()}
                 ${this.stateObj.attributes.mode
                   ? html`-
-                    ${computeAttributeValueDisplay(
-                      this.hass.localize,
+                    ${this.hass.formatEntityAttributeValue(
                       this.stateObj,
-                      this.hass.locale,
-                      this.hass.config,
-                      this.hass.entities,
                       "mode"
                     )}`
                   : ""}
@@ -51,10 +44,10 @@ class HaHumidifierState extends LitElement {
     }
 
     if (this.stateObj.attributes.current_humidity != null) {
-      return `${formatNumber(
-        this.stateObj.attributes.current_humidity,
-        this.hass.locale
-      )}${blankBeforePercent(this.hass.locale)}%`;
+      return `${this.hass.formatEntityAttributeValue(
+        this.stateObj,
+        "current_humidity"
+      )}`;
     }
 
     return undefined;
@@ -66,10 +59,10 @@ class HaHumidifierState extends LitElement {
     }
 
     if (this.stateObj.attributes.humidity != null) {
-      return `${formatNumber(
-        this.stateObj.attributes.humidity,
-        this.hass.locale
-      )}${blankBeforePercent(this.hass.locale)}%`;
+      return `${this.hass.formatEntityAttributeValue(
+        this.stateObj,
+        "humidity"
+      )}`;
     }
 
     return "";
@@ -80,53 +73,44 @@ class HaHumidifierState extends LitElement {
       return this.hass.localize(`state.default.${this.stateObj.state}`);
     }
 
-    const stateString = computeStateDisplay(
-      this.hass.localize,
-      this.stateObj,
-      this.hass.locale,
-      this.hass.config,
-      this.hass.entities
-    );
+    const stateString = this.hass.formatEntityState(this.stateObj);
 
-    return this.stateObj.attributes.action && this.stateObj.state !== OFF
-      ? `${computeAttributeValueDisplay(
-          this.hass.localize,
-          this.stateObj,
-          this.hass.locale,
-          this.hass.config,
-          this.hass.entities,
-          "action"
-        )} (${stateString})`
-      : stateString;
+    if (this.stateObj.attributes.action && this.stateObj.state !== OFF) {
+      const actionString = this.hass.formatEntityAttributeValue(
+        this.stateObj,
+        "action"
+      );
+      return `${actionString} (${stateString})`;
+    }
+
+    return stateString;
   }
 
-  static get styles(): CSSResultGroup {
-    return css`
-      :host {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        white-space: nowrap;
-      }
+  static styles = css`
+    :host {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      white-space: nowrap;
+    }
 
-      .target {
-        color: var(--primary-text-color);
-      }
+    .target {
+      color: var(--primary-text-color);
+    }
 
-      .current {
-        color: var(--secondary-text-color);
-      }
+    .current {
+      color: var(--secondary-text-color);
+    }
 
-      .state-label {
-        font-weight: bold;
-      }
+    .state-label {
+      font-weight: bold;
+    }
 
-      .unit {
-        display: inline-block;
-        direction: ltr;
-      }
-    `;
-  }
+    .unit {
+      display: inline-block;
+      direction: ltr;
+    }
+  `;
 }
 
 declare global {

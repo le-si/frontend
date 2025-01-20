@@ -28,9 +28,7 @@ export default class HaAutomationConditionEditor extends LitElement {
 
   @property({ type: Boolean }) public disabled = false;
 
-  @property({ type: Boolean }) public yamlMode = false;
-
-  @property({ type: Boolean }) public reOrderMode = false;
+  @property({ attribute: false }) public yamlMode = false;
 
   private _processedCondition = memoizeOne((condition) =>
     expandConditionWithShorthand(condition)
@@ -49,8 +47,7 @@ export default class HaAutomationConditionEditor extends LitElement {
               ? html`
                   ${this.hass.localize(
                     "ui.panel.config.automation.editor.conditions.unsupported_condition",
-                    "condition",
-                    condition.condition
+                    { condition: condition.condition }
                   )}
                 `
               : ""}
@@ -62,13 +59,12 @@ export default class HaAutomationConditionEditor extends LitElement {
             ></ha-yaml-editor>
           `
         : html`
-            <div>
+            <div @value-changed=${this._onUiChanged}>
               ${dynamicElement(
                 `ha-automation-condition-${condition.condition}`,
                 {
                   hass: this.hass,
                   condition: condition,
-                  reOrderMode: this.reOrderMode,
                   disabled: this.disabled,
                 }
               )}
@@ -84,6 +80,15 @@ export default class HaAutomationConditionEditor extends LitElement {
     }
     // @ts-ignore
     fireEvent(this, "value-changed", { value: ev.detail.value, yaml: true });
+  }
+
+  private _onUiChanged(ev: CustomEvent) {
+    ev.stopPropagation();
+    const value = {
+      ...(this.condition.alias ? { alias: this.condition.alias } : {}),
+      ...ev.detail.value,
+    };
+    fireEvent(this, "value-changed", { value });
   }
 
   static styles = haStyle;

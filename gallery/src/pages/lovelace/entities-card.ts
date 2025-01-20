@@ -1,8 +1,10 @@
-import { html, LitElement, PropertyValues, TemplateResult } from "lit";
+import type { PropertyValues, TemplateResult } from "lit";
+import { html, LitElement } from "lit";
 import { customElement, query } from "lit/decorators";
 import { getEntity } from "../../../../src/fake_data/entity";
 import { provideHass } from "../../../../src/fake_data/provide_hass";
 import "../../components/demo-cards";
+import { mockIcons } from "../../../../demo/src/stubs/icons";
 
 const ENTITIES = [
   getEntity("light", "bed_light", "on", {
@@ -135,6 +137,14 @@ const ENTITIES = [
   getEntity("text", "unavailable", "unavailable", {
     friendly_name: "Message",
   }),
+  getEntity("event", "unavailable", "unavailable", {
+    friendly_name: "Empty remote",
+  }),
+  getEntity("event", "doorbell", "2023-07-17T21:26:11.615+00:00", {
+    friendly_name: "Doorbell",
+    device_class: "doorbell",
+    event_type: "Ding-Dong",
+  }),
 ];
 
 const CONFIGS = [
@@ -154,6 +164,7 @@ const CONFIGS = [
     - input_number.number
     - sensor.humidity
     - text.message
+    - event.doorbell
     `,
   },
   {
@@ -246,6 +257,7 @@ const CONFIGS = [
     - input_number.unavailable
     - input_select.unavailable
     - text.unavailable
+    - event.unavailable
     `,
   },
   {
@@ -276,11 +288,11 @@ const CONFIGS = [
     config: `
 - type: entities
   entities:
-    - type: call-service
+    - type: perform-action
       icon: mdi:power
       name: Bed light
       action_name: Toggle light
-      service: light.toggle
+      action: light.toggle
       data:
         entity_id: light.bed_light
     - type: section
@@ -313,6 +325,7 @@ class DemoEntities extends LitElement {
     hass.updateTranslations(null, "en");
     hass.updateTranslations("lovelace", "en");
     hass.addEntities(ENTITIES);
+    mockIcons(hass);
   }
 }
 

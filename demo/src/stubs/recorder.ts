@@ -5,17 +5,17 @@ import {
   differenceInHours,
   endOfDay,
 } from "date-fns";
-import {
+import type {
   Statistics,
   StatisticsMetaData,
   StatisticValue,
 } from "../../../src/data/recorder";
-import { MockHomeAssistant } from "../../../src/fake_data/provide_hass";
+import type { MockHomeAssistant } from "../../../src/fake_data/provide_hass";
 
 const generateMeanStatistics = (
   start: Date,
   end: Date,
-  // eslint-disable-next-line @typescript-eslint/default-param-last
+  // eslint-disable-next-line default-param-last
   period: "5minute" | "hour" | "day" | "month" = "hour",
   initValue: number,
   maxDiff: number
@@ -43,8 +43,8 @@ const generateMeanStatistics = (
       period === "day"
         ? addDays(currentDate, 1)
         : period === "month"
-        ? addMonths(currentDate, 1)
-        : addHours(currentDate, 1);
+          ? addMonths(currentDate, 1)
+          : addHours(currentDate, 1);
   }
   return statistics;
 };
@@ -52,7 +52,7 @@ const generateMeanStatistics = (
 const generateSumStatistics = (
   start: Date,
   end: Date,
-  // eslint-disable-next-line @typescript-eslint/default-param-last
+  // eslint-disable-next-line default-param-last
   period: "5minute" | "hour" | "day" | "month" = "hour",
   initValue: number,
   maxDiff: number
@@ -72,6 +72,7 @@ const generateSumStatistics = (
       min: null,
       max: null,
       last_reset: 0,
+      change: add,
       state: initValue + sum,
       sum,
     });
@@ -79,8 +80,8 @@ const generateSumStatistics = (
       period === "day"
         ? addDays(currentDate, 1)
         : period === "month"
-        ? addMonths(currentDate, 1)
-        : addHours(currentDate, 1);
+          ? addMonths(currentDate, 1)
+          : addHours(currentDate, 1);
   }
   return statistics;
 };
@@ -88,7 +89,7 @@ const generateSumStatistics = (
 const generateCurvedStatistics = (
   start: Date,
   end: Date,
-  // eslint-disable-next-line @typescript-eslint/default-param-last
+  // eslint-disable-next-line default-param-last
   _period: "5minute" | "hour" | "day" | "month" = "hour",
   initValue: number,
   maxDiff: number,
@@ -103,8 +104,8 @@ const generateCurvedStatistics = (
   let half = false;
   const now = new Date();
   while (end > currentDate && currentDate < now) {
-    const add = Math.random() * maxDiff;
-    sum += i * add;
+    const add = i * (Math.random() * maxDiff);
+    sum += add;
     statistics.push({
       start: currentDate.getTime(),
       end: currentDate.getTime(),
@@ -112,6 +113,7 @@ const generateCurvedStatistics = (
       min: null,
       max: null,
       last_reset: 0,
+      change: add,
       state: initValue + sum,
       sum: metered ? sum : null,
     });

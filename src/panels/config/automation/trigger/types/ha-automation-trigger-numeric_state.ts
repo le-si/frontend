@@ -1,4 +1,5 @@
-import { html, LitElement, PropertyValues } from "lit";
+import type { PropertyValues } from "lit";
+import { html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
 import { createDurationData } from "../../../../../common/datetime/create_duration_data";
@@ -9,6 +10,7 @@ import "../../../../../components/ha-form/ha-form";
 import type { SchemaUnion } from "../../../../../components/ha-form/types";
 import type { NumericStateTrigger } from "../../../../../data/automation";
 import type { HomeAssistant } from "../../../../../types";
+import { ensureArray } from "../../../../../common/array/ensure-array";
 
 @customElement("ha-automation-trigger-numeric_state")
 export class HaNumericStateTrigger extends LitElement {
@@ -25,15 +27,21 @@ export class HaNumericStateTrigger extends LitElement {
   private _schema = memoizeOne(
     (
       localize: LocalizeFunc,
+      entityId: string | string[],
       inputAboveIsEntity?: boolean,
       inputBelowIsEntity?: boolean
     ) =>
       [
-        { name: "entity_id", required: true, selector: { entity: {} } },
+        {
+          name: "entity_id",
+          required: true,
+          selector: { entity: { multiple: true } },
+        },
         {
           name: "attribute",
           selector: {
             attribute: {
+              entity_id: entityId ? entityId[0] : undefined,
               hide_attributes: [
                 "access_token",
                 "auto_update",
@@ -51,6 +59,8 @@ export class HaNumericStateTrigger extends LitElement {
                 "effect",
                 "entity_id",
                 "entity_picture",
+                "event_type",
+                "event_types",
                 "fan_mode",
                 "fan_modes",
                 "fan_speed_list",
@@ -123,12 +133,9 @@ export class HaNumericStateTrigger extends LitElement {
               ],
             },
           },
-          context: {
-            filter_entity: "entity_id",
-          },
         },
         {
-          name: "mode_above",
+          name: "lower_limit",
           type: "select",
           required: true,
           options: [
@@ -169,7 +176,7 @@ export class HaNumericStateTrigger extends LitElement {
               },
             ] as const)),
         {
-          name: "mode_below",
+          name: "upper_limit",
           type: "select",
           required: true,
           options: [
@@ -218,6 +225,19 @@ export class HaNumericStateTrigger extends LitElement {
   );
 
   public willUpdate(changedProperties: PropertyValues) {
+    this._inputAboveIsEntity =
+      this._inputAboveIsEntity ??
+      (typeof this.trigger.above === "string" &&
+        ((this.trigger.above as string).startsWith("input_number.") ||
+          (this.trigger.above as string).startsWith("number.") ||
+          (this.trigger.above as string).startsWith("sensor.")));
+    this._inputBelowIsEntity =
+      this._inputBelowIsEntity ??
+      (typeof this.trigger.below === "string" &&
+        ((this.trigger.below as string).startsWith("input_number.") ||
+          (this.trigger.below as string).startsWith("number.") ||
+          (this.trigger.below as string).startsWith("sensor.")));
+
     if (!changedProperties.has("trigger")) {
       return;
     }
@@ -231,40 +251,40 @@ export class HaNumericStateTrigger extends LitElement {
     }
   }
 
-  public static get defaultConfig() {
+  public static get defaultConfig(): NumericStateTrigger {
     return {
-      entity_id: "",
+      trigger: "numeric_state",
+      entity_id: [],
     };
   }
 
+  private _data = memoizeOne(
+    (
+      inputAboveIsEntity: boolean,
+      inputBelowIsEntity: boolean,
+      trigger: NumericStateTrigger
+    ) => ({
+      lower_limit: inputAboveIsEntity ? "input" : "value",
+      upper_limit: inputBelowIsEntity ? "input" : "value",
+      ...trigger,
+      entity_id: ensureArray(trigger.entity_id),
+      for: createDurationData(trigger.for),
+    })
+  );
+
   public render() {
-    const trgFor = createDurationData(this.trigger.for);
-
-    const inputAboveIsEntity =
-      this._inputAboveIsEntity ??
-      (typeof this.trigger.above === "string" &&
-        ((this.trigger.above as string).startsWith("input_number.") ||
-          (this.trigger.above as string).startsWith("number.") ||
-          (this.trigger.above as string).startsWith("sensor.")));
-    const inputBelowIsEntity =
-      this._inputBelowIsEntity ??
-      (typeof this.trigger.below === "string" &&
-        ((this.trigger.below as string).startsWith("input_number.") ||
-          (this.trigger.below as string).startsWith("number.") ||
-          (this.trigger.below as string).startsWith("sensor.")));
-
     const schema = this._schema(
       this.hass.localize,
-      inputAboveIsEntity,
-      inputBelowIsEntity
+      this.trigger.entity_id,
+      this._inputAboveIsEntity,
+      this._inputBelowIsEntity
     );
 
-    const data = {
-      mode_above: inputAboveIsEntity ? "input" : "value",
-      mode_below: inputBelowIsEntity ? "input" : "value",
-      ...this.trigger,
-      for: trgFor,
-    };
+    const data = this._data(
+      this._inputAboveIsEntity!,
+      this._inputBelowIsEntity!,
+      this.trigger
+    );
 
     return html`
       <ha-form
@@ -280,13 +300,17 @@ export class HaNumericStateTrigger extends LitElement {
 
   private _valueChanged(ev: CustomEvent): void {
     ev.stopPropagation();
-    const newTrigger = ev.detail.value;
+    const newTrigger = { ...ev.detail.value };
 
-    this._inputAboveIsEntity = newTrigger.mode_above === "input";
-    this._inputBelowIsEntity = newTrigger.mode_below === "input";
+    this._inputAboveIsEntity = newTrigger.lower_limit === "input";
+    this._inputBelowIsEntity = newTrigger.upper_limit === "input";
 
-    delete newTrigger.mode_above;
-    delete newTrigger.mode_below;
+    delete newTrigger.lower_limit;
+    delete newTrigger.upper_limit;
+
+    if (newTrigger.value_template === "") {
+      delete newTrigger.value_template;
+    }
 
     fireEvent(this, "value-changed", { value: newTrigger });
   }

@@ -1,14 +1,15 @@
-import { Connection, createCollection } from "home-assistant-js-websocket";
-import { LocalizeFunc } from "../common/translations/localize";
-import { HomeAssistant } from "../types";
+import type { Connection } from "home-assistant-js-websocket";
+import { createCollection } from "home-assistant-js-websocket";
+import type { LocalizeFunc } from "../common/translations/localize";
+import type { HomeAssistant } from "../types";
 import { debounce } from "../common/util/debounce";
 
 export const integrationsWithPanel = {
-  matter: "/config/matter",
-  mqtt: "/config/mqtt",
-  thread: "/config/thread",
-  zha: "/config/zha/dashboard",
-  zwave_js: "/config/zwave_js/dashboard",
+  matter: "config/matter",
+  mqtt: "config/mqtt",
+  thread: "config/thread",
+  zha: "config/zha/dashboard",
+  zwave_js: "config/zwave_js/dashboard",
 };
 
 export type IntegrationType =
@@ -16,10 +17,13 @@ export type IntegrationType =
   | "helper"
   | "hub"
   | "service"
-  | "hardware";
+  | "hardware"
+  | "entity"
+  | "system";
 
 export interface IntegrationManifest {
   is_built_in: boolean;
+  overwrites_built_in?: boolean;
   domain: string;
   name: string;
   config_flow: boolean;
@@ -29,18 +33,28 @@ export interface IntegrationManifest {
   after_dependencies?: string[];
   codeowners?: string[];
   requirements?: string[];
-  ssdp?: Array<{ manufacturer?: string; modelName?: string; st?: string }>;
+  ssdp?: { manufacturer?: string; modelName?: string; st?: string }[];
   zeroconf?: string[];
   homekit?: { models: string[] };
   integration_type?: IntegrationType;
   loggers?: string[];
-  quality_scale?: "gold" | "internal" | "platinum" | "silver";
+  quality_scale?:
+    | "bronze"
+    | "silver"
+    | "gold"
+    | "platinum"
+    | "no_score"
+    | "internal"
+    | "legacy"
+    | "custom";
   iot_class:
     | "assumed_state"
     | "cloud_polling"
     | "cloud_push"
     | "local_polling"
     | "local_push";
+  single_config_entry?: boolean;
+  version?: string;
 }
 export interface IntegrationSetup {
   domain: string;
@@ -54,10 +68,8 @@ export interface IntegrationLogInfo {
 
 export enum LogSeverity {
   CRITICAL = 50,
-  FATAL = 50,
   ERROR = 40,
   WARNING = 30,
-  WARN = 30,
   INFO = 20,
   DEBUG = 10,
   NOTSET = 0,

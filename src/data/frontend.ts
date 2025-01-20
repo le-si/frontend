@@ -1,4 +1,4 @@
-import { Connection } from "home-assistant-js-websocket";
+import type { Connection } from "home-assistant-js-websocket";
 import { getOptimisticCollection } from "./collection";
 
 export interface CoreFrontendUserData {
@@ -14,7 +14,7 @@ declare global {
 export type ValidUserDataKey = keyof FrontendUserData;
 
 export const fetchFrontendUserData = async <
-  UserDataKey extends ValidUserDataKey
+  UserDataKey extends ValidUserDataKey,
 >(
   conn: Connection,
   key: UserDataKey
@@ -29,20 +29,20 @@ export const fetchFrontendUserData = async <
 };
 
 export const saveFrontendUserData = async <
-  UserDataKey extends ValidUserDataKey
+  UserDataKey extends ValidUserDataKey,
 >(
   conn: Connection,
   key: UserDataKey,
   value: FrontendUserData[UserDataKey]
 ): Promise<void> =>
-  conn.sendMessagePromise<void>({
+  conn.sendMessagePromise<undefined>({
     type: "frontend/set_user_data",
     key,
     value,
   });
 
 export const getOptimisticFrontendUserDataCollection = <
-  UserDataKey extends ValidUserDataKey
+  UserDataKey extends ValidUserDataKey,
 >(
   conn: Connection,
   userDataKey: UserDataKey

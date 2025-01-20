@@ -1,7 +1,7 @@
-import { TemplateResult } from "lit";
+import type { TemplateResult } from "lit";
 import { fireEvent } from "../../common/dom/fire_event";
 import type { HaFormSchema } from "../../components/ha-form/types";
-import {
+import type {
   DataEntryFlowStep,
   DataEntryFlowStepAbort,
   DataEntryFlowStepCreateEntry,
@@ -9,12 +9,15 @@ import {
   DataEntryFlowStepForm,
   DataEntryFlowStepMenu,
   DataEntryFlowStepProgress,
+  FlowType,
 } from "../../data/data_entry_flow";
 import type { IntegrationManifest } from "../../data/integration";
 import type { HomeAssistant } from "../../types";
 
 export interface FlowConfig {
-  loadDevicesAndAreas: boolean;
+  flowType: FlowType;
+
+  showDevices: boolean;
 
   createFlow(hass: HomeAssistant, handler: string): Promise<DataEntryFlowStep>;
 
@@ -28,15 +31,20 @@ export interface FlowConfig {
 
   deleteFlow(hass: HomeAssistant, flowId: string): Promise<unknown>;
 
+  renderAbortHeader?(
+    hass: HomeAssistant,
+    step: DataEntryFlowStepAbort
+  ): TemplateResult | string;
+
   renderAbortDescription(
     hass: HomeAssistant,
     step: DataEntryFlowStepAbort
-  ): TemplateResult | "";
+  ): TemplateResult | string;
 
   renderShowFormStepHeader(
     hass: HomeAssistant,
     step: DataEntryFlowStepForm
-  ): string;
+  ): string | TemplateResult;
 
   renderShowFormStepDescription(
     hass: HomeAssistant,
@@ -46,13 +54,15 @@ export interface FlowConfig {
   renderShowFormStepFieldLabel(
     hass: HomeAssistant,
     step: DataEntryFlowStepForm,
-    field: HaFormSchema
+    field: HaFormSchema,
+    options: { path?: string[]; [key: string]: any }
   ): string;
 
   renderShowFormStepFieldHelper(
     hass: HomeAssistant,
     step: DataEntryFlowStepForm,
-    field: HaFormSchema
+    field: HaFormSchema,
+    options: { path?: string[]; [key: string]: any }
   ): TemplateResult | string;
 
   renderShowFormStepFieldError(
@@ -90,14 +100,17 @@ export interface FlowConfig {
   renderShowFormProgressHeader(
     hass: HomeAssistant,
     step: DataEntryFlowStepProgress
-  ): string;
+  ): string | TemplateResult;
 
   renderShowFormProgressDescription(
     hass: HomeAssistant,
     step: DataEntryFlowStepProgress
   ): TemplateResult | "";
 
-  renderMenuHeader(hass: HomeAssistant, step: DataEntryFlowStepMenu): string;
+  renderMenuHeader(
+    hass: HomeAssistant,
+    step: DataEntryFlowStepMenu
+  ): string | TemplateResult;
 
   renderMenuDescription(
     hass: HomeAssistant,
@@ -121,8 +134,7 @@ export interface FlowConfig {
 export type LoadingReason =
   | "loading_handlers"
   | "loading_flow"
-  | "loading_step"
-  | "loading_devices_areas";
+  | "loading_step";
 
 export interface DataEntryFlowDialogParams {
   startFlowHandler?: string;
@@ -136,6 +148,7 @@ export interface DataEntryFlowDialogParams {
   }) => void;
   flowConfig: FlowConfig;
   showAdvanced?: boolean;
+  entryId?: string;
   dialogParentElement?: HTMLElement;
 }
 

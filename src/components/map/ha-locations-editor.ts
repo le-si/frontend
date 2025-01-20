@@ -1,27 +1,24 @@
-import {
+import type {
   Circle,
   DivIcon,
   DragEndEvent,
   LatLng,
+  LatLngExpression,
   Marker,
   MarkerOptions,
 } from "leaflet";
-import {
-  css,
-  CSSResultGroup,
-  html,
-  LitElement,
-  PropertyValues,
-  TemplateResult,
-} from "lit";
+import type { PropertyValues, TemplateResult } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
 import { fireEvent } from "../../common/dom/fire_event";
 import type { LeafletModuleType } from "../../common/dom/setup-leaflet-map";
-import type { HomeAssistant } from "../../types";
+import type { HomeAssistant, ThemeMode } from "../../types";
 import "../ha-input-helper-text";
 import "./ha-map";
 import type { HaMap } from "./ha-map";
+import type { HaIcon } from "../ha-icon";
+import type { HaSvgIcon } from "../ha-svg-icon";
 
 declare global {
   // for fire event
@@ -40,6 +37,7 @@ export interface MarkerLocation {
   name?: string;
   id: string;
   icon?: string;
+  iconPath?: string;
   radius_color?: string;
   location_editable?: boolean;
   radius_editable?: boolean;
@@ -53,11 +51,15 @@ export class HaLocationsEditor extends LitElement {
 
   @property() public helper?: string;
 
-  @property({ type: Boolean }) public autoFit = false;
+  @property({ attribute: "auto-fit", type: Boolean }) public autoFit = false;
 
   @property({ type: Number }) public zoom = 16;
 
-  @property({ type: Boolean }) public darkMode?: boolean;
+  @property({ attribute: "theme-mode", type: String })
+  public themeMode: ThemeMode = "auto";
+
+  @property({ type: Boolean, attribute: "pin-on-click" })
+  public pinOnClick = false;
 
   @state() private _locationMarkers?: Record<string, Marker | Circle>;
 
@@ -67,7 +69,8 @@ export class HaLocationsEditor extends LitElement {
 
   private Leaflet?: LeafletModuleType;
 
-  private _loadPromise: Promise<boolean | void>;
+  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+  private _loadPromise: Promise<boolean | undefined | void>;
 
   constructor() {
     super();
@@ -81,11 +84,21 @@ export class HaLocationsEditor extends LitElement {
     );
   }
 
-  public fitMap(): void {
-    this.map.fitMap();
+  public fitMap(options?: { zoom?: number; pad?: number }): void {
+    this.map.fitMap(options);
   }
 
-  public async fitMarker(id: string): Promise<void> {
+  public fitBounds(
+    boundingbox: LatLngExpression[],
+    options?: { zoom?: number; pad?: number }
+  ) {
+    this.map.fitBounds(boundingbox, options);
+  }
+
+  public async fitMarker(
+    id: string,
+    options?: { zoom?: number }
+  ): Promise<void> {
     if (!this.Leaflet) {
       await this._loadPromise;
     }
@@ -104,7 +117,10 @@ export class HaLocationsEditor extends LitElement {
       if (circle) {
         this.map.leafletMap.fitBounds(circle.getBounds());
       } else {
-        this.map.leafletMap.setView(marker.getLatLng(), this.zoom);
+        this.map.leafletMap.setView(
+          marker.getLatLng(),
+          options?.zoom || this.zoom
+        );
       }
     }
   }
@@ -116,7 +132,9 @@ export class HaLocationsEditor extends LitElement {
         .layers=${this._getLayers(this._circles, this._locationMarkers)}
         .zoom=${this.zoom}
         .autoFit=${this.autoFit}
-        .darkMode=${this.darkMode}
+        .themeMode=${this.themeMode}
+        .clickable=${this.pinOnClick}
+        @map-clicked=${this._mapClicked}
       ></ha-map>
       ${this.helper
         ? html`<ha-input-helper-text>${this.helper}</ha-input-helper-text>`
@@ -128,8 +146,8 @@ export class HaLocationsEditor extends LitElement {
     (
       circles: Record<string, Circle>,
       markers?: Record<string, Marker | Circle>
-    ): Array<Marker | Circle> => {
-      const layers: Array<Marker | Circle> = [];
+    ): (Marker | Circle)[] => {
+      const layers: (Marker | Circle)[] = [];
       Array.prototype.push.apply(layers, Object.values(circles));
       if (markers) {
         Array.prototype.push.apply(layers, Object.values(markers));
@@ -151,15 +169,51 @@ export class HaLocationsEditor extends LitElement {
     }
   }
 
+  public updated(changedProps: PropertyValues): void {
+    // Still loading.
+    if (!this.Leaflet) {
+      return;
+    }
+
+    if (changedProps.has("locations")) {
+      const oldLocations = changedProps.get("locations");
+      const movedLocations = this.locations?.filter(
+        (loc, idx) =>
+          !oldLocations[idx] ||
+          ((loc.latitude !== oldLocations[idx].latitude ||
+            loc.longitude !== oldLocations[idx].longitude) &&
+            this.map.leafletMap?.getBounds().contains({
+              lat: oldLocations[idx].latitude,
+              lng: oldLocations[idx].longitude,
+            }) &&
+            !this.map.leafletMap
+              ?.getBounds()
+              .contains({ lat: loc.latitude, lng: loc.longitude }))
+      );
+      if (movedLocations?.length === 1) {
+        this.map.leafletMap?.panTo({
+          lat: movedLocations[0].latitude,
+          lng: movedLocations[0].longitude,
+        });
+      }
+    }
+  }
+
+  private _normalizeLongitude(longitude: number): number {
+    if (Math.abs(longitude) > 180.0) {
+      // Normalize longitude if map provides values beyond -180 to +180 degrees.
+      return (((longitude % 360.0) + 540.0) % 360.0) - 180.0;
+    }
+    return longitude;
+  }
+
   private _updateLocation(ev: DragEndEvent) {
     const marker = ev.target;
     const latlng: LatLng = marker.getLatLng();
-    let longitude: number = latlng.lng;
-    if (Math.abs(longitude) > 180.0) {
-      // Normalize longitude if map provides values beyond -180 to +180 degrees.
-      longitude = (((longitude % 360.0) + 540.0) % 360.0) - 180.0;
-    }
-    const location: [number, number] = [latlng.lat, longitude];
+    const location: [number, number] = [
+      latlng.lat,
+      this._normalizeLongitude(latlng.lng),
+    ];
     fireEvent(
       this,
       "location-updated",
@@ -184,6 +238,22 @@ export class HaLocationsEditor extends LitElement {
     fireEvent(this, "marker-clicked", { id: marker.id }, { bubbles: false });
   }
 
+  private _mapClicked(ev) {
+    if (this.pinOnClick && this._locationMarkers) {
+      const id = Object.keys(this._locationMarkers)[0];
+      const location: [number, number] = [
+        ev.detail.location[0],
+        this._normalizeLongitude(ev.detail.location[1]),
+      ];
+      fireEvent(this, "location-updated", { id, location }, { bubbles: false });
+
+      // If the normalized longitude wraps around the globe, pan to the new location.
+      if (location[1] !== ev.detail.location[1]) {
+        this.map.leafletMap?.panTo({ lat: location[0], lng: location[1] });
+      }
+    }
+  }
+
   private _updateMarkers(): void {
     if (!this.locations || !this.locations.length) {
       this._circles = {};
@@ -199,15 +269,21 @@ export class HaLocationsEditor extends LitElement {
 
     this.locations.forEach((location: MarkerLocation) => {
       let icon: DivIcon | undefined;
-      if (location.icon) {
+      if (location.icon || location.iconPath) {
         // create icon
         const el = document.createElement("div");
         el.className = "named-icon";
-        if (location.name) {
+        if (location.name !== undefined) {
           el.innerText = location.name;
         }
-        const iconEl = document.createElement("ha-icon");
-        iconEl.setAttribute("icon", location.icon);
+        let iconEl: HaIcon | HaSvgIcon;
+        if (location.icon) {
+          iconEl = document.createElement("ha-icon");
+          iconEl.setAttribute("icon", location.icon);
+        } else {
+          iconEl = document.createElement("ha-svg-icon");
+          iconEl.setAttribute("path", location.iconPath!);
+        }
         el.prepend(iconEl);
 
         icon = this.Leaflet!.divIcon({
@@ -298,14 +374,12 @@ export class HaLocationsEditor extends LitElement {
     fireEvent(this, "markers-updated");
   }
 
-  static get styles(): CSSResultGroup {
-    return css`
-      ha-map {
-        display: block;
-        height: 100%;
-      }
-    `;
-  }
+  static styles = css`
+    ha-map {
+      display: block;
+      height: 100%;
+    }
+  `;
 }
 
 declare global {

@@ -1,7 +1,7 @@
 import "@material/mwc-list/mwc-list-item";
 import {
   mdiFan,
-  mdiHomeMapMarker,
+  mdiHomeImportOutline,
   mdiMapMarker,
   mdiPause,
   mdiPlay,
@@ -9,19 +9,26 @@ import {
   mdiStop,
   mdiTargetVariant,
 } from "@mdi/js";
-import { css, CSSResultGroup, html, LitElement, nothing } from "lit";
+import { LitElement, css, html, nothing } from "lit";
 import { customElement, property } from "lit/decorators";
+import memoizeOne from "memoize-one";
 import { stopPropagation } from "../../../common/dom/stop_propagation";
-import { computeAttributeValueDisplay } from "../../../common/entity/compute_attribute_display";
-import { computeStateDisplay } from "../../../common/entity/compute_state_display";
+import { computeStateDomain } from "../../../common/entity/compute_state_domain";
 import { supportsFeature } from "../../../common/entity/supports-feature";
+import "../../../components/entity/ha-battery-icon";
 import "../../../components/ha-attributes";
 import "../../../components/ha-icon";
 import "../../../components/ha-icon-button";
 import "../../../components/ha-select";
 import { UNAVAILABLE } from "../../../data/entity";
-import { VacuumEntity, VacuumEntityFeature } from "../../../data/vacuum";
-import { HomeAssistant } from "../../../types";
+import type { EntityRegistryDisplayEntry } from "../../../data/entity_registry";
+import {
+  findBatteryChargingEntity,
+  findBatteryEntity,
+} from "../../../data/entity_registry";
+import type { VacuumEntity } from "../../../data/vacuum";
+import { VacuumEntityFeature } from "../../../data/vacuum";
+import type { HomeAssistant } from "../../../types";
 
 interface VacuumCommand {
   translationKey: string;
@@ -43,9 +50,11 @@ const VACUUM_COMMANDS: VacuumCommand[] = [
     icon: mdiPause,
     serviceName: "pause",
     isVisible: (stateObj) =>
-      // We need also to check if Start is supported because if not we show play-pause
-      supportsFeature(stateObj, VacuumEntityFeature.START) &&
-      supportsFeature(stateObj, VacuumEntityFeature.PAUSE),
+      // We need also to check if Start is supported because if not we show start-pause
+      // Start-pause service is only available for old vacuum entities, new entities have the `STATE` feature
+      supportsFeature(stateObj, VacuumEntityFeature.PAUSE) &&
+      (supportsFeature(stateObj, VacuumEntityFeature.STATE) ||
+        supportsFeature(stateObj, VacuumEntityFeature.START)),
   },
   {
     translationKey: "start_pause",
@@ -53,6 +62,8 @@ const VACUUM_COMMANDS: VacuumCommand[] = [
     serviceName: "start_pause",
     isVisible: (stateObj) =>
       // If start is supported, we don't show this button
+      // This service is only available for old vacuum entities, new entities have the `STATE` feature
+      !supportsFeature(stateObj, VacuumEntityFeature.STATE) &&
       !supportsFeature(stateObj, VacuumEntityFeature.START) &&
       supportsFeature(stateObj, VacuumEntityFeature.PAUSE),
   },
@@ -79,7 +90,7 @@ const VACUUM_COMMANDS: VacuumCommand[] = [
   },
   {
     translationKey: "return_home",
-    icon: mdiHomeMapMarker,
+    icon: mdiHomeImportOutline,
     serviceName: "return_to_base",
     isVisible: (stateObj) =>
       supportsFeature(stateObj, VacuumEntityFeature.RETURN_HOME),
@@ -90,7 +101,7 @@ const VACUUM_COMMANDS: VacuumCommand[] = [
 class MoreInfoVacuum extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
-  @property() public stateObj?: VacuumEntity;
+  @property({ attribute: false }) public stateObj?: VacuumEntity;
 
   protected render() {
     if (!this.hass || !this.stateObj) {
@@ -115,37 +126,12 @@ class MoreInfoVacuum extends LitElement {
                 <strong>
                   ${supportsFeature(stateObj, VacuumEntityFeature.STATUS) &&
                   stateObj.attributes.status
-                    ? computeAttributeValueDisplay(
-                        this.hass.localize,
-                        stateObj,
-                        this.hass.locale,
-                        this.hass.config,
-                        this.hass.entities,
-                        "status"
-                      )
-                    : computeStateDisplay(
-                        this.hass.localize,
-                        stateObj,
-                        this.hass.locale,
-                        this.hass.config,
-                        this.hass.entities
-                      )}
+                    ? this.hass.formatEntityAttributeValue(stateObj, "status")
+                    : this.hass.formatEntityState(stateObj)}
                 </strong>
               </span>
             </div>
-            ${supportsFeature(stateObj, VacuumEntityFeature.BATTERY) &&
-            stateObj.attributes.battery_level
-              ? html`
-                  <div>
-                    <span>
-                      ${stateObj.attributes.battery_level} %
-                      <ha-icon
-                        .icon=${stateObj.attributes.battery_icon}
-                      ></ha-icon>
-                    </span>
-                  </div>
-                `
-              : ""}
+            ${this._renderBattery()}
           </div>`
         : ""}
       ${VACUUM_COMMANDS.some((item) => item.isVisible(stateObj))
@@ -157,7 +143,7 @@ class MoreInfoVacuum extends LitElement {
                   "ui.dialogs.more_info_control.vacuum.commands"
                 )}
               </div>
-              <div class="flex-horizontal">
+              <div class="flex-horizontal space-around">
                 ${VACUUM_COMMANDS.filter((item) =>
                   item.isVisible(stateObj)
                 ).map(
@@ -166,7 +152,7 @@ class MoreInfoVacuum extends LitElement {
                       <ha-icon-button
                         .path=${item.icon}
                         .entry=${item}
-                        @click=${this.callService}
+                        @click=${this._callService}
                         .label=${this.hass!.localize(
                           `ui.dialogs.more_info_control.vacuum.${item.translationKey}`
                         )}
@@ -189,7 +175,7 @@ class MoreInfoVacuum extends LitElement {
                   )}
                   .disabled=${stateObj.state === UNAVAILABLE}
                   .value=${stateObj.attributes.fan_speed}
-                  @selected=${this.handleFanSpeedChanged}
+                  @selected=${this._handleFanSpeedChanged}
                   fixedMenuPosition
                   naturalMenuWidth
                   @closed=${stopPropagation}
@@ -197,12 +183,8 @@ class MoreInfoVacuum extends LitElement {
                   ${stateObj.attributes.fan_speed_list!.map(
                     (mode) => html`
                       <mwc-list-item .value=${mode}>
-                        ${computeAttributeValueDisplay(
-                          this.hass.localize,
+                        ${this.hass.formatEntityAttributeValue(
                           stateObj,
-                          this.hass.locale,
-                          this.hass.config,
-                          this.hass.entities,
                           "fan_speed",
                           mode
                         )}
@@ -215,12 +197,8 @@ class MoreInfoVacuum extends LitElement {
                 >
                   <span>
                     <ha-svg-icon .path=${mdiFan}></ha-svg-icon>
-                    ${computeAttributeValueDisplay(
-                      this.hass.localize,
+                    ${this.hass.formatEntityAttributeValue(
                       stateObj,
-                      this.hass.locale,
-                      this.hass.config,
-                      this.hass.entities,
                       "fan_speed"
                     )}
                   </span>
@@ -239,14 +217,91 @@ class MoreInfoVacuum extends LitElement {
     `;
   }
 
-  private callService(ev: CustomEvent) {
+  private _deviceEntities = memoizeOne(
+    (
+      deviceId: string,
+      entities: HomeAssistant["entities"]
+    ): EntityRegistryDisplayEntry[] => {
+      const entries = Object.values(entities);
+      return entries.filter((entity) => entity.device_id === deviceId);
+    }
+  );
+
+  private _renderBattery() {
+    const stateObj = this.stateObj!;
+
+    const deviceId = this.hass.entities[stateObj.entity_id]?.device_id;
+
+    const entities = deviceId
+      ? this._deviceEntities(deviceId, this.hass.entities)
+      : [];
+
+    const batteryEntity = findBatteryEntity(this.hass, entities);
+    const battery = batteryEntity
+      ? this.hass.states[batteryEntity.entity_id]
+      : undefined;
+    const batteryDomain = battery ? computeStateDomain(battery) : undefined;
+
+    // Use device battery entity
+    if (
+      battery &&
+      (batteryDomain === "binary_sensor" || !isNaN(battery.state as any))
+    ) {
+      const batteryChargingEntity = findBatteryChargingEntity(
+        this.hass,
+        entities
+      );
+      const batteryCharging = batteryChargingEntity
+        ? this.hass.states[batteryChargingEntity?.entity_id]
+        : undefined;
+
+      return html`
+        <div>
+          <span>
+            ${batteryDomain === "sensor"
+              ? this.hass.formatEntityState(battery)
+              : nothing}
+            <ha-battery-icon
+              .hass=${this.hass}
+              .batteryStateObj=${battery}
+              .batteryChargingStateObj=${batteryCharging}
+            ></ha-battery-icon>
+          </span>
+        </div>
+      `;
+    }
+
+    // Use battery_level and battery_icon deprecated attributes
+    if (
+      supportsFeature(stateObj, VacuumEntityFeature.BATTERY) &&
+      stateObj.attributes.battery_level
+    ) {
+      return html`
+        <div>
+          <span>
+            ${this.hass.formatEntityAttributeValue(
+              stateObj,
+              "battery_level",
+              Math.round(stateObj.attributes.battery_level)
+            )}
+
+            <ha-icon .icon=${stateObj.attributes.battery_icon}></ha-icon>
+          </span>
+        </div>
+      `;
+    }
+
+    return nothing;
+  }
+
+  private _callService(ev: CustomEvent) {
     const entry = (ev.target! as any).entry as VacuumCommand;
     this.hass.callService("vacuum", entry.serviceName, {
       entity_id: this.stateObj!.entity_id,
     });
   }
 
-  private handleFanSpeedChanged(ev) {
+  private _handleFanSpeedChanged(ev) {
     const oldVal = this.stateObj!.attributes.fan_speed;
     const newVal = ev.target.value;
 
@@ -260,21 +315,22 @@ class MoreInfoVacuum extends LitElement {
     });
   }
 
-  static get styles(): CSSResultGroup {
-    return css`
-      :host {
-        line-height: 1.5;
-      }
-      .status-subtitle {
-        color: var(--secondary-text-color);
-      }
-      .flex-horizontal {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-      }
-    `;
-  }
+  static styles = css`
+    :host {
+      line-height: 1.5;
+    }
+    .status-subtitle {
+      color: var(--secondary-text-color);
+    }
+    .flex-horizontal {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+    }
+    .space-around {
+      justify-content: space-around;
+    }
+  `;
 }
 
 declare global {

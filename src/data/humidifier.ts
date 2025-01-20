@@ -1,9 +1,9 @@
-import {
+import type {
   HassEntityAttributeBase,
   HassEntityBase,
 } from "home-assistant-js-websocket";
 
-export type HumidifierState = "on" | "off";
+export type HumidifierState = "off" | "on";
 
 export type HumidifierAction = "off" | "idle" | "humidifying" | "drying";
 
@@ -19,7 +19,19 @@ export type HumidifierEntity = HassEntityBase & {
   };
 };
 
-export const HUMIDIFIER_SUPPORT_MODES = 1;
+export const enum HumidifierEntityFeature {
+  MODES = 1,
+}
 
-export const HUMIDIFIER_DEVICE_CLASS_HUMIDIFIER = "humidifier";
-export const HUMIDIFIER_DEVICE_CLASS_DEHUMIDIFIER = "dehumidifier";
+export const enum HumidifierEntityDeviceClass {
+  HUMIDIFIER = "humidifier",
+  DEHUMIDIFIER = "dehumidifier",
+}
+
+export const HUMIDIFIER_ACTION_MODE: Record<HumidifierAction, HumidifierState> =
+  {
+    drying: "on",
+    humidifying: "on",
+    idle: "off",
+    off: "off",
+  };

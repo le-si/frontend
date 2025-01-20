@@ -1,4 +1,4 @@
-import { HomeAssistant } from "../types";
+import type { HomeAssistant } from "../types";
 
 interface SystemCheckValueDateObject {
   type: "date";
@@ -26,14 +26,13 @@ export type SystemCheckValue =
   | boolean
   | SystemCheckValueObject;
 
-export interface SystemHealthInfo {
-  [domain: string]: {
+export type SystemHealthInfo = Record<
+  string,
+  {
     manage_url?: string;
-    info: {
-      [key: string]: SystemCheckValue;
-    };
-  };
-}
+    info: Record<string, SystemCheckValue>;
+  }
+>;
 
 interface SystemHealthEventInitial {
   type: "initial";
@@ -69,7 +68,7 @@ type SystemHealthEvent =
 
 export const subscribeSystemHealthInfo = (
   hass: HomeAssistant,
-  callback: (info: SystemHealthInfo) => void
+  callback: (info: SystemHealthInfo | undefined) => void
 ) => {
   let data = {};
 
@@ -82,6 +81,7 @@ export const subscribeSystemHealthInfo = (
       }
       if (updateEvent.type === "finish") {
         unsubProm.then((unsub) => unsub());
+        callback(undefined);
         return;
       }
 

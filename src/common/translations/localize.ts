@@ -1,6 +1,8 @@
-import IntlMessageFormat from "intl-messageformat";
-import { polyfillLocaleData } from "../../resources/locale-data-polyfill";
-import { Resources, TranslationDict } from "../../types";
+import type { IntlMessageFormat } from "intl-messageformat";
+import type { HTMLTemplateResult } from "lit";
+import { polyfillLocaleData } from "../../resources/polyfills/locale-data-polyfill";
+import type { Resources, TranslationDict } from "../../types";
+import { fireEvent } from "../dom/fire_event";
 
 // Exclude some patterns from key type checking for now
 // These are intended to be removed as errors are fixed
@@ -11,23 +13,19 @@ export type LocalizeKeys =
   | `ui.card.alarm_control_panel.${string}`
   | `ui.card.weather.attributes.${string}`
   | `ui.card.weather.cardinal_direction.${string}`
+  | `ui.card.lawn_mower.actions.${string}`
   | `ui.components.calendar.event.rrule.${string}`
-  | `ui.components.logbook.${string}`
   | `ui.components.selectors.file.${string}`
+  | `ui.components.logbook.messages.detected_device_classes.${string}`
+  | `ui.components.logbook.messages.cleared_device_classes.${string}`
   | `ui.dialogs.entity_registry.editor.${string}`
+  | `ui.dialogs.more_info_control.lawn_mower.${string}`
   | `ui.dialogs.more_info_control.vacuum.${string}`
   | `ui.dialogs.quick-bar.commands.${string}`
   | `ui.dialogs.unhealthy.reason.${string}`
   | `ui.dialogs.unsupported.reason.${string}`
   | `ui.panel.config.${string}.${"caption" | "description"}`
-  | `ui.panel.config.automation.${string}`
   | `ui.panel.config.dashboard.${string}`
-  | `ui.panel.config.devices.${string}`
-  | `ui.panel.config.energy.${string}`
-  | `ui.panel.config.info.${string}`
-  | `ui.panel.config.lovelace.${string}`
-  | `ui.panel.config.network.${string}`
-  | `ui.panel.config.scene.${string}`
   | `ui.panel.config.zha.${string}`
   | `ui.panel.config.zwave_js.${string}`
   | `ui.panel.lovelace.card.${string}`
@@ -35,24 +33,30 @@ export type LocalizeKeys =
   | `ui.panel.page-authorize.form.${string}`
   | `component.${string}`;
 
+export type LandingPageKeys = FlattenObjectKeys<
+  TranslationDict["landing-page"]
+>;
+
 // Tweaked from https://www.raygesualdo.com/posts/flattening-object-keys-with-typescript-types
 export type FlattenObjectKeys<
   T extends Record<string, any>,
-  Key extends keyof T = keyof T
+  Key extends keyof T = keyof T,
 > = Key extends string
   ? T[Key] extends Record<string, unknown>
     ? `${Key}.${FlattenObjectKeys<T[Key]>}`
     : `${Key}`
   : never;
 
+// Later, don't return string when HTML is passed, and don't allow undefined
 export type LocalizeFunc<Keys extends string = LocalizeKeys> = (
   key: Keys,
-  ...args: any[]
+  values?: Record<
+    string,
+    string | number | HTMLTemplateResult | null | undefined
+  >
 ) => string;
 
-interface FormatType {
-  [format: string]: any;
-}
+type FormatType = Record<string, any>;
 export interface FormatsType {
   number: FormatType;
   date: FormatType;
@@ -81,14 +85,16 @@ export interface FormatsType {
  */
 
 export const computeLocalize = async <Keys extends string = LocalizeKeys>(
-  cache: any,
+  cache: HTMLElement & {
+    _localizationCache?: Record<string, IntlMessageFormat>;
+  },
   language: string,
   resources: Resources,
   formats?: FormatsType
 ): Promise<LocalizeFunc<Keys>> => {
-  await import("../../resources/intl-polyfill").then(() =>
-    polyfillLocaleData(language)
-  );
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  const { IntlMessageFormat } = await import("intl-messageformat");
+  await polyfillLocaleData(language);
 
   // Every time any of the parameters change, invalidate the strings cache.
   cache._localizationCache = {};
@@ -107,7 +113,7 @@ export const computeLocalize = async <Keys extends string = LocalizeKeys>(
     }
 
     const messageKey = key + translatedValue;
-    let translatedMessage = cache._localizationCache[messageKey] as
+    let translatedMessage = cache._localizationCache![messageKey] as
       | IntlMessageFormat
       | undefined;
 
@@ -121,7 +127,7 @@ export const computeLocalize = async <Keys extends string = LocalizeKeys>(
       } catch (err: any) {
         return "Translation error: " + err.message;
       }
-      cache._localizationCache[messageKey] = translatedMessage;
+      cache._localizationCache![messageKey] = translatedMessage;
     }
 
     let argObject = {};
@@ -129,6 +135,7 @@ export const computeLocalize = async <Keys extends string = LocalizeKeys>(
       argObject = args[0];
     } else {
       for (let i = 0; i < args.length; i += 2) {
+        // @ts-expect-error in some places the old format (key, value, key, value) is used
         argObject[args[i]] = args[i + 1];
       }
     }
@@ -136,6 +143,12 @@ export const computeLocalize = async <Keys extends string = LocalizeKeys>(
     try {
       return translatedMessage.format<string>(argObject) as string;
     } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error("Translation error", key, language, err);
+      fireEvent(cache, "write_log", {
+        level: "error",
+        message: `Failed to format translation for key '${key}' in language '${language}'. ${err}`,
+      });
       return "Translation " + err;
     }
   };

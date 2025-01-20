@@ -1,15 +1,14 @@
-import { mdiDelete, mdiPlus } from "@mdi/js";
-import { CSSResultGroup, LitElement, css, html } from "lit";
+import { type CSSResultGroup, LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { ensureArray } from "../../../../../common/array/ensure-array";
 import { fireEvent } from "../../../../../common/dom/fire_event";
 import "../../../../../components/ha-button";
-import "../../../../../components/ha-icon-button";
-import { Condition } from "../../../../../data/automation";
-import { Action, ChooseAction } from "../../../../../data/script";
+import type { Action, ChooseAction, Option } from "../../../../../data/script";
 import { haStyle } from "../../../../../resources/styles";
-import { HomeAssistant } from "../../../../../types";
-import { ActionElement } from "../ha-automation-action-row";
+import type { HomeAssistant } from "../../../../../types";
+import "../../option/ha-automation-option";
+import type { ActionElement } from "../ha-automation-action-row";
+import "../ha-automation-action";
 
 @customElement("ha-automation-action-choose")
 export class HaChooseAction extends LitElement implements ActionElement {
@@ -17,80 +16,27 @@ export class HaChooseAction extends LitElement implements ActionElement {
 
   @property({ type: Boolean }) public disabled = false;
 
-  @property() public action!: ChooseAction;
-
-  @property({ type: Boolean }) public reOrderMode = false;
+  @property({ attribute: false }) public action!: ChooseAction;
 
   @state() private _showDefault = false;
 
-  public static get defaultConfig() {
+  public static get defaultConfig(): ChooseAction {
     return { choose: [{ conditions: [], sequence: [] }] };
   }
 
   protected render() {
     const action = this.action;
 
+    const options = action.choose ? ensureArray(action.choose) : [];
+
     return html`
-      ${(action.choose ? ensureArray(action.choose) : []).map(
-        (option, idx) => html`<ha-card>
-          <ha-icon-button
-            .idx=${idx}
-            .disabled=${this.disabled}
-            @click=${this._removeOption}
-            .label=${this.hass.localize(
-              "ui.panel.config.automation.editor.actions.type.choose.remove_option"
-            )}
-            .path=${mdiDelete}
-          ></ha-icon-button>
-          <div class="card-content">
-            <h2>
-              ${this.hass.localize(
-                "ui.panel.config.automation.editor.actions.type.choose.option",
-                "number",
-                idx + 1
-              )}:
-            </h2>
-            <h3>
-              ${this.hass.localize(
-                "ui.panel.config.automation.editor.actions.type.choose.conditions"
-              )}:
-            </h3>
-            <ha-automation-condition
-              nested
-              .conditions=${ensureArray<string | Condition>(option.conditions)}
-              .reOrderMode=${this.reOrderMode}
-              .disabled=${this.disabled}
-              .hass=${this.hass}
-              .idx=${idx}
-              @value-changed=${this._conditionChanged}
-            ></ha-automation-condition>
-            <h3>
-              ${this.hass.localize(
-                "ui.panel.config.automation.editor.actions.type.choose.sequence"
-              )}:
-            </h3>
-            <ha-automation-action
-              nested
-              .actions=${ensureArray(option.sequence) || []}
-              .reOrderMode=${this.reOrderMode}
-              .disabled=${this.disabled}
-              .hass=${this.hass}
-              .idx=${idx}
-              @value-changed=${this._actionChanged}
-            ></ha-automation-action>
-          </div>
-        </ha-card>`
-      )}
-      <ha-button
-        outlined
-        .label=${this.hass.localize(
-          "ui.panel.config.automation.editor.actions.type.choose.add_option"
-        )}
+      <ha-automation-option
+        .options=${options}
         .disabled=${this.disabled}
-        @click=${this._addOption}
-      >
-        <ha-svg-icon .path=${mdiPlus} slot="icon"></ha-svg-icon>
-      </ha-button>
+        @value-changed=${this._optionsChanged}
+        .hass=${this.hass}
+      ></ha-automation-option>
+
       ${this._showDefault || action.default
         ? html`
             <h2>
@@ -99,25 +45,25 @@ export class HaChooseAction extends LitElement implements ActionElement {
               )}:
             </h2>
             <ha-automation-action
-              nested
               .actions=${ensureArray(action.default) || []}
-              .reOrderMode=${this.reOrderMode}
               .disabled=${this.disabled}
               @value-changed=${this._defaultChanged}
               .hass=${this.hass}
             ></ha-automation-action>
           `
-        : html`<div class="link-button-row">
-            <button
-              class="link"
-              @click=${this._addDefault}
-              .disabled=${this.disabled}
-            >
-              ${this.hass.localize(
-                "ui.panel.config.automation.editor.actions.type.choose.add_default"
-              )}
-            </button>
-          </div>`}
+        : html`
+            <div class="link-button-row">
+              <button
+                class="link"
+                @click=${this._addDefault}
+                .disabled=${this.disabled}
+              >
+                ${this.hass.localize(
+                  "ui.panel.config.automation.editor.actions.type.choose.add_default"
+                )}
+              </button>
+            </div>
+          `}
     `;
   }
 
@@ -125,88 +71,37 @@ export class HaChooseAction extends LitElement implements ActionElement {
     this._showDefault = true;
   }
 
-  private _conditionChanged(ev: CustomEvent) {
+  private _optionsChanged(ev: CustomEvent) {
     ev.stopPropagation();
-    const value = ev.detail.value as Condition[];
-    const index = (ev.target as any).idx;
-    const choose = this.action.choose
-      ? [...ensureArray(this.action.choose)]
-      : [];
-    choose[index].conditions = value;
+    const value = ev.detail.value as Option[];
     fireEvent(this, "value-changed", {
-      value: { ...this.action, choose },
-    });
-  }
-
-  private _actionChanged(ev: CustomEvent) {
-    ev.stopPropagation();
-    const value = ev.detail.value as Action[];
-    const index = (ev.target as any).idx;
-    const choose = this.action.choose
-      ? [...ensureArray(this.action.choose)]
-      : [];
-    choose[index].sequence = value;
-    fireEvent(this, "value-changed", {
-      value: { ...this.action, choose },
-    });
-  }
-
-  private _addOption() {
-    const choose = this.action.choose
-      ? [...ensureArray(this.action.choose)]
-      : [];
-    choose.push({ conditions: [], sequence: [] });
-    fireEvent(this, "value-changed", {
-      value: { ...this.action, choose },
-    });
-  }
-
-  private _removeOption(ev: CustomEvent) {
-    const index = (ev.currentTarget as any).idx;
-    const choose = this.action.choose
-      ? [...ensureArray(this.action.choose)]
-      : [];
-    choose.splice(index, 1);
-    fireEvent(this, "value-changed", {
-      value: { ...this.action, choose },
+      value: {
+        ...this.action,
+        choose: value,
+      },
     });
   }
 
   private _defaultChanged(ev: CustomEvent) {
     ev.stopPropagation();
-    const value = ev.detail.value as Action[];
-    fireEvent(this, "value-changed", {
-      value: {
-        ...this.action,
-        default: value,
-      },
-    });
+    this._showDefault = true;
+    const defaultAction = ev.detail.value as Action[];
+    const newValue: ChooseAction = {
+      ...this.action,
+      default: defaultAction,
+    };
+    if (defaultAction.length === 0) {
+      delete newValue.default;
+    }
+    fireEvent(this, "value-changed", { value: newValue });
   }
 
   static get styles(): CSSResultGroup {
     return [
       haStyle,
       css`
-        ha-card {
-          margin: 16px 0;
-        }
-        .add-card mwc-button {
-          display: block;
-          text-align: center;
-        }
-        ha-icon-button {
-          position: absolute;
-          right: 0;
-          inset-inline-start: initial;
-          inset-inline-end: 0;
-          direction: var(--direction);
-          padding: 4px;
-        }
-        ha-svg-icon {
-          height: 20px;
-        }
         .link-button-row {
-          padding: 14px;
+          padding: 14px 14px 0 14px;
         }
       `,
     ];

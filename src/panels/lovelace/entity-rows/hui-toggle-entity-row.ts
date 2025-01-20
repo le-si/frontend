@@ -1,13 +1,13 @@
-import { html, LitElement, PropertyValues, nothing } from "lit";
+import type { PropertyValues } from "lit";
+import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
-import { computeStateDisplay } from "../../../common/entity/compute_state_display";
 import "../../../components/entity/ha-entity-toggle";
 import { isUnavailableState } from "../../../data/entity";
-import { HomeAssistant } from "../../../types";
+import type { HomeAssistant } from "../../../types";
 import { hasConfigOrEntityChanged } from "../common/has-changed";
 import "../components/hui-generic-entity-row";
 import { createEntityNotFoundWarning } from "../components/hui-warning";
-import { EntityConfig, LovelaceRow } from "./types";
+import type { EntityConfig, LovelaceRow } from "./types";
 
 @customElement("hui-toggle-entity-row")
 class HuiToggleEntityRow extends LitElement implements LovelaceRow {
@@ -61,13 +61,7 @@ class HuiToggleEntityRow extends LitElement implements LovelaceRow {
             `
           : html`
               <div class="text-content">
-                ${computeStateDisplay(
-                  this.hass!.localize,
-                  stateObj,
-                  this.hass!.locale,
-                  this.hass.config,
-                  this.hass!.entities
-                )}
+                ${this.hass.formatEntityState(stateObj)}
               </div>
             `}
       </hui-generic-entity-row>

@@ -1,16 +1,10 @@
 import "@material/mwc-list/mwc-list-item";
-import {
-  css,
-  CSSResultGroup,
-  html,
-  nothing,
-  LitElement,
-  TemplateResult,
-} from "lit";
+import type { TemplateResult } from "lit";
+import { css, html, nothing, LitElement } from "lit";
 import { customElement, property } from "lit/decorators";
 import { fireEvent } from "../common/dom/fire_event";
 import { stopPropagation } from "../common/dom/stop_propagation";
-import { HomeAssistant } from "../types";
+import type { HomeAssistant } from "../types";
 import "./ha-select";
 
 const DEFAULT_THEME = "default";
@@ -21,7 +15,8 @@ export class HaThemePicker extends LitElement {
 
   @property() public label?: string;
 
-  @property() includeDefault?: boolean = false;
+  @property({ attribute: "include-default", type: Boolean })
+  public includeDefault = false;
 
   @property({ attribute: false }) public hass?: HomeAssistant;
 
@@ -42,17 +37,19 @@ export class HaThemePicker extends LitElement {
         fixedMenuPosition
         naturalMenuWidth
       >
-        <mwc-list-item value="remove"
-          >${this.hass!.localize(
-            "ui.components.theme-picker.no_theme"
-          )}</mwc-list-item
-        >
+        ${!this.required
+          ? html`
+              <mwc-list-item value="remove">
+                ${this.hass!.localize("ui.components.theme-picker.no_theme")}
+              </mwc-list-item>
+            `
+          : nothing}
         ${this.includeDefault
-          ? html`<mwc-list-item .value=${DEFAULT_THEME}
-              >${this.hass!.localize(
-                "ui.components.theme-picker.default"
-              )}</mwc-list-item
-            >`
+          ? html`
+              <mwc-list-item .value=${DEFAULT_THEME}>
+                Home Assistant
+              </mwc-list-item>
+            `
           : nothing}
         ${Object.keys(this.hass!.themes.themes)
           .sort()
@@ -64,13 +61,11 @@ export class HaThemePicker extends LitElement {
     `;
   }
 
-  static get styles(): CSSResultGroup {
-    return css`
-      ha-select {
-        width: 100%;
-      }
-    `;
-  }
+  static styles = css`
+    ha-select {
+      width: 100%;
+    }
+  `;
 
   private _changed(ev): void {
     if (!this.hass || ev.target.value === "") {

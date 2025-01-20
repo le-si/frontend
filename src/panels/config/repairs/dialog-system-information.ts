@@ -1,13 +1,7 @@
 import "@material/mwc-button/mwc-button";
-import { UnsubscribeFunc } from "home-assistant-js-websocket";
-import {
-  css,
-  CSSResultGroup,
-  html,
-  LitElement,
-  TemplateResult,
-  nothing,
-} from "lit";
+import type { UnsubscribeFunc } from "home-assistant-js-websocket";
+import type { CSSResultGroup, TemplateResult } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { isComponentLoaded } from "../../../common/config/is_component_loaded";
 import { formatDateTime } from "../../../common/datetime/format_date_time";
@@ -19,17 +13,16 @@ import "../../../components/ha-card";
 import "../../../components/ha-circular-progress";
 import { createCloseHeading } from "../../../components/ha-dialog";
 import "../../../components/ha-metric";
-import { fetchHassioStats, HassioStats } from "../../../data/hassio/common";
-import {
-  fetchHassioResolution,
-  HassioResolution,
-} from "../../../data/hassio/resolution";
+import type { HassioStats } from "../../../data/hassio/common";
+import { fetchHassioStats } from "../../../data/hassio/common";
+import type { HassioResolution } from "../../../data/hassio/resolution";
+import { fetchHassioResolution } from "../../../data/hassio/resolution";
 import { domainToName } from "../../../data/integration";
-import {
-  subscribeSystemHealthInfo,
+import type {
   SystemCheckValueObject,
   SystemHealthInfo,
 } from "../../../data/system_health";
+import { subscribeSystemHealthInfo } from "../../../data/system_health";
 import { showAlertDialog } from "../../../dialogs/generic/show-dialog-box";
 import { haStyleDialog } from "../../../resources/styles";
 import type { HomeAssistant } from "../../../types";
@@ -71,7 +64,9 @@ class DialogSystemInformation extends LitElement {
 
   @state() private _opened = false;
 
-  private _subscriptions?: Array<UnsubscribeFunc | Promise<UnsubscribeFunc>>;
+  private _systemHealthSubscription?: Promise<UnsubscribeFunc>;
+
+  private _hassIOSubscription?: UnsubscribeFunc;
 
   public showDialog(): void {
     this._opened = true;
@@ -86,48 +81,43 @@ class DialogSystemInformation extends LitElement {
   }
 
   private _subscribe(): void {
-    const subs: Array<UnsubscribeFunc | Promise<UnsubscribeFunc>> = [];
     if (isComponentLoaded(this.hass, "system_health")) {
-      subs.push(
-        subscribeSystemHealthInfo(this.hass!, (info) => {
-          this._systemInfo = info;
-        })
+      this._systemHealthSubscription = subscribeSystemHealthInfo(
+        this.hass,
+        (info) => {
+          if (!info) {
+            this._systemHealthSubscription = undefined;
+          } else {
+            this._systemInfo = info;
+          }
+        }
       );
     }
 
     if (isComponentLoaded(this.hass, "hassio")) {
-      subs.push(
-        subscribePollingCollection(
-          this.hass,
-          async () => {
-            this._supervisorStats = await fetchHassioStats(
-              this.hass,
-              "supervisor"
-            );
-            this._coreStats = await fetchHassioStats(this.hass, "core");
-          },
-          10000
-        )
+      this._hassIOSubscription = subscribePollingCollection(
+        this.hass,
+        async () => {
+          this._supervisorStats = await fetchHassioStats(
+            this.hass,
+            "supervisor"
+          );
+          this._coreStats = await fetchHassioStats(this.hass, "core");
+        },
+        10000
       );
 
       fetchHassioResolution(this.hass).then((data) => {
         this._resolutionInfo = data;
       });
     }
-
-    this._subscriptions = subs;
   }
 
   private _unsubscribe() {
-    while (this._subscriptions?.length) {
-      const unsub = this._subscriptions.pop()!;
-      if (unsub instanceof Promise) {
-        unsub.then((unsubFunc) => unsubFunc());
-      } else {
-        unsub();
-      }
-    }
-    this._subscriptions = undefined;
+    this._systemHealthSubscription?.then((unsubFunc) => unsubFunc());
+    this._systemHealthSubscription = undefined;
+    this._hassIOSubscription?.();
+    this._hassIOSubscription = undefined;
 
     this._systemInfo = undefined;
     this._resolutionInfo = undefined;
@@ -146,8 +136,6 @@ class DialogSystemInformation extends LitElement {
       <ha-dialog
         open
         @closed=${this.closeDialog}
-        scrimClickAction
-        escapeKeyAction
         .heading=${createCloseHeading(
           this.hass,
           this.hass.localize("ui.panel.config.repairs.system_information")
@@ -305,13 +293,11 @@ class DialogSystemInformation extends LitElement {
     const sections: TemplateResult[] = [];
 
     if (!this._systemInfo) {
-      sections.push(
-        html`
-          <div class="loading-container">
-            <ha-circular-progress active></ha-circular-progress>
-          </div>
-        `
-      );
+      sections.push(html`
+        <div class="loading-container">
+          <ha-circular-progress indeterminate></ha-circular-progress>
+        </div>
+      `);
     } else {
       const domains = Object.keys(this._systemInfo).sort(sortKeys);
       for (const domain of domains) {
@@ -329,7 +315,10 @@ class DialogSystemInformation extends LitElement {
 
             if (info.type === "pending") {
               value = html`
-                <ha-circular-progress active size="tiny"></ha-circular-progress>
+                <ha-circular-progress
+                  indeterminate
+                  size="small"
+                ></ha-circular-progress>
               `;
             } else if (info.type === "failed") {
               value = html`
@@ -371,24 +360,22 @@ class DialogSystemInformation extends LitElement {
           `);
         }
         if (domain !== "homeassistant") {
-          sections.push(
-            html`
-              <div class="card-header">
-                <h3>${domainToName(this.hass.localize, domain)}</h3>
-                ${!domainInfo.manage_url
-                  ? ""
-                  : html`
-                      <a class="manage" href=${domainInfo.manage_url}>
-                        <mwc-button>
-                          ${this.hass.localize(
-                            "ui.panel.config.info.system_health.manage"
-                          )}
-                        </mwc-button>
-                      </a>
-                    `}
-              </div>
-            `
-          );
+          sections.push(html`
+            <div class="card-header">
+              <h3>${domainToName(this.hass.localize, domain)}</h3>
+              ${!domainInfo.manage_url
+                ? ""
+                : html`
+                    <a class="manage" href=${domainInfo.manage_url}>
+                      <mwc-button>
+                        ${this.hass.localize(
+                          "ui.panel.config.info.system_health.manage"
+                        )}
+                      </mwc-button>
+                    </a>
+                  `}
+            </div>
+          `);
         }
         sections.push(html`
           <table>

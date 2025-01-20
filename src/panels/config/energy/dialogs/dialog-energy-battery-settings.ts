@@ -1,19 +1,21 @@
 import "@material/mwc-button/mwc-button";
 import { mdiBatteryHigh } from "@mdi/js";
-import { css, CSSResultGroup, html, LitElement, nothing } from "lit";
+import type { CSSResultGroup } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import "../../../../components/entity/ha-statistic-picker";
 import "../../../../components/ha-dialog";
+import type { BatterySourceTypeEnergyPreference } from "../../../../data/energy";
 import {
-  BatterySourceTypeEnergyPreference,
   emptyBatteryEnergyPreference,
+  energyStatisticHelpUrl,
 } from "../../../../data/energy";
 import { getSensorDeviceClassConvertibleUnits } from "../../../../data/sensor";
-import { HassDialog } from "../../../../dialogs/make-dialog-manager";
+import type { HassDialog } from "../../../../dialogs/make-dialog-manager";
 import { haStyle, haStyleDialog } from "../../../../resources/styles";
-import { HomeAssistant } from "../../../../types";
-import { EnergySettingsBatteryDialogParams } from "./show-dialogs-energy";
+import type { HomeAssistant } from "../../../../types";
+import type { EnergySettingsBatteryDialogParams } from "./show-dialogs-energy";
 
 const energyUnitClasses = ["energy"];
 
@@ -32,6 +34,8 @@ export class DialogEnergyBatterySettings
 
   @state() private _error?: string;
 
+  private _excludeList?: string[];
+
   public async showDialog(
     params: EnergySettingsBatteryDialogParams
   ): Promise<void> {
@@ -42,13 +46,25 @@ export class DialogEnergyBatterySettings
     this._energy_units = (
       await getSensorDeviceClassConvertibleUnits(this.hass, "energy")
     ).units;
+    const allSources: string[] = [];
+    this._params.battery_sources.forEach((entry) => {
+      allSources.push(entry.stat_energy_from);
+      allSources.push(entry.stat_energy_to);
+    });
+    this._excludeList = allSources.filter(
+      (id) =>
+        id !== this._source?.stat_energy_from &&
+        id !== this._source?.stat_energy_to
+    );
   }
 
-  public closeDialog(): void {
+  public closeDialog() {
     this._params = undefined;
     this._source = undefined;
     this._error = undefined;
+    this._excludeList = undefined;
     fireEvent(this, "dialog-closed", { dialog: this.localName });
+    return true;
   }
 
   protected render() {
@@ -65,9 +81,7 @@ export class DialogEnergyBatterySettings
             .path=${mdiBatteryHigh}
             style="--mdc-icon-size: 32px;"
           ></ha-svg-icon>
-          ${this.hass.localize(
-            "ui.panel.config.energy.battery.dialog.header"
-          )}`}
+          ${this.hass.localize("ui.panel.config.energy.battery.dialog.header")}`}
         @closed=${this.closeDialog}
       >
         ${this._error ? html`<p class="error">${this._error}</p>` : ""}
@@ -80,22 +94,32 @@ export class DialogEnergyBatterySettings
 
         <ha-statistic-picker
           .hass=${this.hass}
+          .helpMissingEntityUrl=${energyStatisticHelpUrl}
           .includeUnitClass=${energyUnitClasses}
           .value=${this._source.stat_energy_to}
           .label=${this.hass.localize(
             "ui.panel.config.energy.battery.dialog.energy_into_battery"
           )}
+          .excludeStatistics=${[
+            ...(this._excludeList || []),
+            this._source.stat_energy_from,
+          ]}
           @value-changed=${this._statisticToChanged}
           dialogInitialFocus
         ></ha-statistic-picker>
 
         <ha-statistic-picker
           .hass=${this.hass}
+          .helpMissingEntityUrl=${energyStatisticHelpUrl}
           .includeUnitClass=${energyUnitClasses}
           .value=${this._source.stat_energy_from}
           .label=${this.hass.localize(
             "ui.panel.config.energy.battery.dialog.energy_out_of_battery"
           )}
+          .excludeStatistics=${[
+            ...(this._excludeList || []),
+            this._source.stat_energy_to,
+          ]}
           @value-changed=${this._statisticFromChanged}
         ></ha-statistic-picker>
 
