@@ -1,5 +1,4 @@
 import "@home-assistant/webawesome/dist/components/divider/divider";
-import { consume } from "@lit/context";
 import { mdiClose, mdiHelpCircleOutline } from "@mdi/js";
 import type { HassServiceTarget } from "home-assistant-js-websocket";
 import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
@@ -8,6 +7,7 @@ import { customElement, property, query, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { repeat } from "lit/directives/repeat";
 import memoizeOne from "memoize-one";
+import { consume } from "../../../common/decorators/consume";
 import { ensureArray } from "../../../common/array/ensure-array";
 import type { HASSDomTargetEvent } from "../../../common/dom/fire_event";
 import { fireEvent } from "../../../common/dom/fire_event";
@@ -925,9 +925,11 @@ class DialogAddAutomationElement
           const area = device
             ? getDeviceArea(device, this.hass.areas, this.hass.devices)
             : undefined;
-          const parentDevice = device?.parent_device_id
-            ? this.hass.devices[device.parent_device_id]
-            : undefined;
+          const parentDevice =
+            device?.parent_device_id &&
+            device.next_name_part === "parent_device"
+              ? this.hass.devices[device.parent_device_id]
+              : undefined;
           if (area) {
             subtitle = [
               computeAreaName(area) || area.area_id,
@@ -2418,22 +2420,16 @@ class DialogAddAutomationElement
           display: none;
         }
 
-        .groups {
-          --md-list-item-leading-space: var(--ha-space-3);
-          --md-list-item-trailing-space: var(--md-list-item-leading-space);
-          --md-list-item-bottom-space: var(--ha-space-1);
-          --md-list-item-top-space: var(--md-list-item-bottom-space);
-          --md-list-item-supporting-text-font: var(--ha-font-family-body);
-          --md-list-item-one-line-container-height: var(--ha-space-10);
-        }
         ha-bottom-sheet .groups,
         ha-bottom-sheet ha-automation-add-from-target {
           margin: var(--ha-space-3);
         }
         .groups .selected {
           background-color: var(--ha-color-fill-primary-normal-active);
-          --md-list-item-label-text-color: var(--ha-color-on-primary-normal);
           --icon-primary-color: var(--ha-color-on-primary-normal);
+        }
+        .groups .selected::part(headline) {
+          color: var(--ha-color-on-primary-normal);
         }
         .groups .selected ha-svg-icon {
           color: var(--ha-color-on-primary-normal);

@@ -3,7 +3,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { repeat } from "lit/directives/repeat";
 import memoizeOne from "memoize-one";
-import { consume } from "@lit/context";
+import { consume } from "../../common/decorators/consume";
 import { ensureArray } from "../../common/array/ensure-array";
 import { transform } from "../../common/decorators/transform";
 import { fireEvent } from "../../common/dom/fire_event";
@@ -19,7 +19,6 @@ import "../chips/ha-chip-set";
 import "../chips/ha-input-chip";
 import "../ha-checkbox";
 import "../ha-dropdown-item";
-import "../ha-formfield";
 import "../ha-generic-picker";
 import "../ha-input-helper-text";
 import "../ha-select";
@@ -400,8 +399,7 @@ export class HaSelectSelector extends LitElement {
     :host {
       position: relative;
     }
-    ha-select,
-    ha-formfield {
+    ha-select {
       display: block;
     }
 

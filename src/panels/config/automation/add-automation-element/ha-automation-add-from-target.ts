@@ -2,7 +2,7 @@ import "@home-assistant/webawesome/dist/components/tree-item/tree-item";
 import type WaTreeItem from "@home-assistant/webawesome/dist/components/tree-item/tree-item";
 import "@home-assistant/webawesome/dist/components/tree/tree";
 import type { WaSelectionChangeEvent } from "@home-assistant/webawesome/dist/events/selection-change";
-import { consume, type ContextType } from "@lit/context";
+import type { ContextType } from "@lit/context";
 import { mdiTextureBox } from "@mdi/js";
 import type { HassEntity } from "home-assistant-js-websocket";
 import {
@@ -16,6 +16,7 @@ import {
 import { customElement, property, state } from "lit/decorators";
 import { ifDefined } from "lit/directives/if-defined";
 import memoizeOne from "memoize-one";
+import { consume } from "../../../../common/decorators/consume";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import { computeAreaName } from "../../../../common/entity/compute_area_name";
 import { computeDeviceName } from "../../../../common/entity/compute_device_name";
@@ -121,9 +122,11 @@ export default class HaAutomationAddFromTarget extends LitElement {
   @consume({ context: internationalizationContext, subscribe: true })
   private _i18n!: ContextType<typeof internationalizationContext>;
 
+  @state()
   @consume({ context: statesContext, subscribe: true })
   private states!: ContextType<typeof statesContext>;
 
+  @state()
   @consume({ context: registriesContext, subscribe: true })
   private _registries!: ContextType<typeof registriesContext>;
 
@@ -1616,10 +1619,6 @@ export default class HaAutomationAddFromTarget extends LitElement {
       background-color: var(--ha-color-fill-primary-normal-hover);
     }
 
-    wa-tree-item::part(base).tree-item-selected .item {
-      background-color: yellow;
-    }
-
     ha-list-base {
       --ha-row-item-padding-inline: var(--ha-space-3);
       --ha-row-item-padding-block: var(--ha-space-1);
@@ -1632,7 +1631,6 @@ export default class HaAutomationAddFromTarget extends LitElement {
 
     ha-list-item-button.selected {
       background-color: var(--ha-color-fill-primary-normal-active);
-      --md-list-item-label-text-color: var(--ha-color-on-primary-normal);
       --icon-primary-color: var(--ha-color-on-primary-normal);
     }
 

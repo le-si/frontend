@@ -1,4 +1,3 @@
-import { consume } from "@lit/context";
 import {
   mdiArrowDown,
   mdiArrowUp,
@@ -13,6 +12,7 @@ import type { CSSResultGroup, TemplateResult } from "lit";
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
+import { consume } from "../../../../common/decorators/consume";
 import { ensureArray } from "../../../../common/array/ensure-array";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import { preventDefaultStopPropagation } from "../../../../common/dom/prevent_default_stop_propagation";
@@ -119,9 +119,7 @@ export default class HaAutomationOptionRow extends LitElement {
     if (typeof conditions[0] === "string") {
       str += conditions[0];
     } else {
-      str += describeCondition(conditions[0], this.hass, this._entityReg, {
-        hideTriggerIds: withTriggerReferences,
-      });
+      str += describeCondition(conditions[0], this.hass, this._entityReg);
     }
     // When chips are rendered, the additional-condition count follows them.
     if (conditions.length > 1 && !withTriggerReferences) {

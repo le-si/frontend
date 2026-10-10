@@ -1,0 +1,204 @@
+import type { LocalizeFunc } from "../../../common/translations/localize";
+import type { DataTableRowData } from "../../../components/data-table/ha-data-table";
+import type { RepositoryBase } from "../../../data/marketplace/repository";
+import type { MarketplaceTab } from "./ha-marketplace-dashboard";
+
+export const STATUS_ORDER = [
+  "pending-restart",
+  "pending-upgrade",
+  "installed",
+  "new",
+  "default",
+] as const satisfies readonly RepositoryBase["status"][];
+
+// New and available are never installed, so the installed tab only has these
+const INSTALLED_STATUS_ORDER = [
+  "pending-restart",
+  "pending-upgrade",
+  "installed",
+] as const satisfies readonly RepositoryBase["status"][];
+
+export const STATUS_FILTER = "status";
+export const TYPE_FILTER = "type";
+
+export const SOURCE_FILTER = "source";
+const SORT_PARAM = "sort";
+const DIRECTION_PARAM = "direction";
+
+// Where a repository comes from, the community catalog or added from a link
+export const SOURCE_ORDER = ["catalog", "custom"] as const;
+
+type RepositorySource = (typeof SOURCE_ORDER)[number];
+
+const repositorySource = (repository: RepositoryBase): RepositorySource =>
+  repository.custom ? "custom" : "catalog";
+
+// What the filter panes picked, nothing picked in a pane shows everything
+export type RepositoryFilters = Partial<
+  Record<
+    typeof STATUS_FILTER | typeof TYPE_FILTER | typeof SOURCE_FILTER,
+    string[]
+  >
+>;
+
+export const statusesOfTab = (
+  tab: MarketplaceTab
+): readonly (typeof STATUS_ORDER)[number][] =>
+  tab === "installed" ? INSTALLED_STATUS_ORDER : STATUS_ORDER;
+
+// The filters are kept for every tab. A status picked on another tab that this
+// one can't list is left out here, instead of leaving the table empty.
+export const filtersOfTab = (
+  filters: RepositoryFilters,
+  tab: MarketplaceTab
+): RepositoryFilters => {
+  const statuses: readonly string[] = statusesOfTab(tab);
+
+  return {
+    ...filters,
+    [STATUS_FILTER]: filters[STATUS_FILTER]?.filter((status) =>
+      statuses.includes(status)
+    ),
+  };
+};
+
+// The status pane only sends what this tab lists, so statuses picked on another
+// tab that this one can't list are kept for when that tab is opened again
+export const statusFilterOfTab = (
+  filters: RepositoryFilters,
+  tab: MarketplaceTab,
+  picked: string[] = []
+): string[] => {
+  const statuses: readonly string[] = statusesOfTab(tab);
+
+  return [
+    ...(filters[STATUS_FILTER]?.filter(
+      (status) => !statuses.includes(status)
+    ) ?? []),
+    ...picked,
+  ];
+};
+
+const matchesFilters = (
+  repository: RepositoryBase,
+  filters: RepositoryFilters = {}
+): boolean => {
+  const statuses = filters[STATUS_FILTER];
+  // Installed takes in what waits for an update or a restart, it is installed too
+  if (
+    statuses?.length &&
+    !statuses.includes(repository.status) &&
+    !(statuses.includes("installed") && repository.installed)
+  ) {
+    return false;
+  }
+
+  const types = filters[TYPE_FILTER];
+  if (types?.length && !types.includes(repository.category)) {
+    return false;
+  }
+
+  const sources = filters[SOURCE_FILTER];
+
+  if (sources?.length && !sources.includes(repositorySource(repository))) {
+    return false;
+  }
+
+  return true;
+};
+
+// Downloaded first, then new ones, then the most starred.
+const compareRepositories = (a: RepositoryBase, b: RepositoryBase): number => {
+  if (a.installed !== b.installed) {
+    return a.installed ? -1 : 1;
+  }
+  if (a.new !== b.new) {
+    return a.new ? -1 : 1;
+  }
+  if (a.stars !== b.stars) {
+    return a.stars > b.stars ? -1 : 1;
+  }
+  return a.name.localeCompare(b.name);
+};
+
+// The moment as a number, 0 without one, or for a date that can not be read
+export const timestamp = (value: string | number): number =>
+  value ? new Date(value).getTime() || 0 : 0;
+
+export const filterRepositories = (
+  repositories: RepositoryBase[],
+  localize: LocalizeFunc,
+  filters?: RepositoryFilters
+): DataTableRowData[] =>
+  repositories
+    .filter((repository) => matchesFilters(repository, filters))
+    .sort(compareRepositories)
+    .map((repository) => ({
+      ...repository,
+      translated_status:
+        localize(
+          `ui.panel.marketplace.repository_status.${repository.status}`
+        ) || repository.status,
+      translated_category: localize(
+        `ui.panel.marketplace.common.type.${repository.category}`
+      ),
+      translated_source: localize(
+        `ui.panel.marketplace.repository_source.${repositorySource(repository)}`
+      ),
+      // A date as text or 0 without one, only numbers sort among each other
+      last_updated_timestamp: timestamp(repository.last_updated),
+    }));
+
+// How to browse, the way a link says it, like
+// /marketplace/browse?sort=stars&direction=desc&status=new
+export interface BrowseSettings {
+  sorting?: { column: string; direction: "asc" | "desc" };
+  filters: RepositoryFilters;
+}
+
+export const browseUrl = ({ sorting, filters }: BrowseSettings): string => {
+  const params = new URLSearchParams();
+  if (sorting) {
+    params.set(SORT_PARAM, sorting.column);
+    params.set(DIRECTION_PARAM, sorting.direction);
+  }
+
+  for (const filter of [STATUS_FILTER, TYPE_FILTER, SOURCE_FILTER] as const) {
+    if (filters[filter]?.length) {
+      params.set(filter, filters[filter].join(","));
+    }
+  }
+
+  const query = params.toString();
+  return query ? `/marketplace/browse?${query}` : "/marketplace/browse";
+};
+
+// Nothing about browsing in the link keeps what was picked before
+export const browseSettingsFromUrl = (
+  search: string
+): BrowseSettings | undefined => {
+  const params = new URLSearchParams(search);
+  if (
+    ![SORT_PARAM, STATUS_FILTER, TYPE_FILTER, SOURCE_FILTER].some((key) =>
+      params.has(key)
+    )
+  ) {
+    return undefined;
+  }
+
+  const column = params.get(SORT_PARAM);
+  const values = (key: string) => params.get(key)?.split(",").filter(Boolean);
+  return {
+    sorting: column
+      ? {
+          column,
+          direction: params.get(DIRECTION_PARAM) === "asc" ? "asc" : "desc",
+        }
+      : undefined,
+    filters: {
+      [STATUS_FILTER]: values(STATUS_FILTER),
+      [TYPE_FILTER]: values(TYPE_FILTER),
+      [SOURCE_FILTER]: values(SOURCE_FILTER),
+    },
+  };
+};

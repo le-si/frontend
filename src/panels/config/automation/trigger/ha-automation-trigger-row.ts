@@ -1,5 +1,4 @@
 import "@home-assistant/webawesome/dist/components/divider/divider";
-import { consume } from "@lit/context";
 import {
   mdiArrowDown,
   mdiArrowUp,
@@ -25,6 +24,7 @@ import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
 import { LitElement, html, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
+import { consume } from "../../../../common/decorators/consume";
 import { ensureArray } from "../../../../common/array/ensure-array";
 import { storage } from "../../../../common/decorators/storage";
 import { fireEvent } from "../../../../common/dom/fire_event";
@@ -72,9 +72,10 @@ import type { HomeAssistant } from "../../../../types";
 import { isMac } from "../../../../util/is_mac";
 import { showEditorToast } from "../editor-toast";
 import "../ha-automation-editor-warning";
-import "../ha-automation-row-behavior";
 import "../ha-automation-row-options";
+import "../ha-automation-row-threshold";
 import { overflowStyles, rowStyles } from "../styles";
+import { getUiSupportWarnings, isConfigObject } from "../ui-support";
 import { getDeviceTarget } from "../target/get_device_target";
 import { getEntityTarget } from "../target/get_entity_target";
 import "../target/ha-automation-row-targets";
@@ -303,9 +304,17 @@ export default class HaAutomationTriggerRow extends LitElement {
         )}
         ${
           type === "platform"
-            ? html`<ha-automation-row-behavior
-                .config=${this.trigger}
-              ></ha-automation-row-behavior>`
+            ? html`<ha-automation-row-threshold
+                  .config=${this.trigger}
+                  .description=${
+                    this.triggerDescriptions[
+                      (this.trigger as PlatformTrigger).trigger
+                    ]
+                  }
+                ></ha-automation-row-threshold>
+                <ha-automation-row-options
+                  .config=${this.trigger}
+                ></ha-automation-row-options>`
             : nothing
         }
         ${
@@ -316,13 +325,6 @@ export default class HaAutomationTriggerRow extends LitElement {
                 triggerTargetSpec,
                 type !== "device"
               )
-            : nothing
-        }
-        ${
-          type === "platform"
-            ? html`<ha-automation-row-options
-                .config=${this.trigger}
-              ></ha-automation-row-options>`
             : nothing
         }
         ${
@@ -356,7 +358,9 @@ export default class HaAutomationTriggerRow extends LitElement {
         class="event-chip"
         aria-live="polite"
       >
-        ${this.hass.localize("ui.panel.config.automation.editor.actions.disabled")}
+        ${this.hass.localize(
+          "ui.panel.config.automation.editor.actions.disabled"
+        )}
       </ha-automation-row-event-chip>
 
       <ha-automation-row-event-chip
@@ -665,6 +669,19 @@ export default class HaAutomationTriggerRow extends LitElement {
     if (changedProperties.has("yamlMode")) {
       this._warnings = undefined;
     }
+    if (
+      changedProperties.has("trigger") &&
+      this._warnings &&
+      this._yamlMode &&
+      isConfigObject(this.trigger) &&
+      !isTriggerList(this.trigger)
+    ) {
+      this._warnings = getUiSupportWarnings(
+        this.hass.localize,
+        `ha-automation-trigger-${this.trigger.trigger}`,
+        this.trigger
+      );
+    }
   }
 
   protected override updated(changedProps: PropertyValues<this>): void {
@@ -745,7 +762,7 @@ export default class HaAutomationTriggerRow extends LitElement {
   }, 5000);
 
   private _handleUiModeNotAvailable(ev: CustomEvent) {
-    this._warnings = handleStructError(this.hass, ev.detail).warnings;
+    this._warnings = handleStructError(this.hass.localize, ev.detail).warnings;
     if (!this._yamlMode) {
       this._yamlMode = true;
     }
@@ -789,8 +806,10 @@ export default class HaAutomationTriggerRow extends LitElement {
         this._renameTrigger();
       },
       editNote: this._editNoteTrigger,
-      toggleYamlMode: () => {
-        this._toggleYamlMode();
+      toggleYamlMode: (yamlMode?: boolean) => {
+        if (yamlMode === undefined || yamlMode !== this._yamlMode) {
+          this._toggleYamlMode();
+        }
         this.openSidebar();
       },
       disable: this._onDisable,
@@ -1003,7 +1022,13 @@ export default class HaAutomationTriggerRow extends LitElement {
       message: this.hass.localize(
         "ui.panel.config.automation.editor.triggers.cut_to_clipboard"
       ),
-      duration: 2000,
+      duration: 4000,
+      action: {
+        text: this.hass.localize("ui.common.undo"),
+        action: () => {
+          fireEvent(window, "undo-change");
+        },
+      },
     });
   };
 

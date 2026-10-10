@@ -7,6 +7,14 @@ export interface ZHAEntityReference {
   original_name?: string | null;
 }
 
+export const computeZHAEntityName = (
+  entity: ZHAEntityReference,
+  deviceName: string
+): string =>
+  entity.name === ""
+    ? deviceName
+    : entity.name || entity.original_name || deviceName;
+
 export interface ZHADevice {
   available: boolean;
   name: string;
@@ -219,7 +227,10 @@ export const reconfigureNode = (
     {
       type: "zha/devices/reconfigure",
       ieee: ieeeAddress,
-    }
+    },
+    // Subscribing starts the reconfiguration, so a reconnect must not
+    // start it again.
+    { resubscribe: false }
   );
 
 export const refreshTopology = (hass: HomeAssistant): Promise<void> =>
